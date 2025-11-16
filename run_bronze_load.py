@@ -1,9 +1,10 @@
 import mysql.connector
-import configparser
 import logging
 import time
 import sys
+import os  # <-- Added 'os'
 from datetime import datetime
+from dotenv import load_dotenv  # <-- Added 'dotenv'
 
 # --- Configuration & Logging Setup ---
 
@@ -34,21 +35,45 @@ def setup_logging():
     
     return logger
 
-def read_config(filename='config.ini'):
-    """Reads database and file path configuration from config.ini."""
+def read_config(env_file='.env'):
+    """Reads database and file path configuration from .env file."""
     logger = logging.getLogger('bronze_etl')
-    logger.info(f"Reading configuration from {filename}...")
-    config = configparser.ConfigParser()
-    if not config.read(filename):
-        logger.error(f"CRITICAL: Configuration file '{filename}' not found.")
-        sys.exit(1)
     
-    # Check for all required sections and keys
-    if 'mysql' not in config or 'etl_paths' not in config:
-        logger.error("CRITICAL: Config file must contain [mysql] and [etl_paths] sections.")
+    # Load environment variables from the .env file
+    if not load_dotenv(env_file):
+        logger.error(f"CRITICAL: Environment file '{env_file}' not found.")
         sys.exit(1)
         
-    return config
+    logger.info(f"Reading configuration from {env_file}...")
+
+    # Map environment variables to the db_config dictionary
+    db_config = {
+        'host': os.getenv('DB_HOST'),
+        'user': os.getenv('DB_USER'),
+        'password': os.getenv('DB_PASSWORD'),
+        'database': os.getenv('DB_DATABASE')
+    }
+
+    # Map environment variables to the paths dictionary
+    paths_config = {
+        'crm_cust_info': os.getenv('PATH_CRM_CUST_INFO'),
+        'crm_prd_info': os.getenv('PATH_CRM_PRD_INFO'),
+        'crm_sales_details': os.getenv('PATH_CRM_SALES_DETAILS'),
+        'erp_cust_az12': os.getenv('PATH_ERP_CUST_AZ12'),
+        'erp_loc_a101': os.getenv('PATH_ERP_LOC_A101'),
+        'erp_px_cat_g1v2': os.getenv('PATH_ERP_PX_CAT_G1V2')
+    }
+
+    # Validate that all required variables were loaded
+    if not all(db_config.values()):
+        logger.error("CRITICAL: One or more DB_... variables are missing from .env file.")
+        sys.exit(1)
+        
+    if not all(paths_config.values()):
+        logger.error("CRITICAL: One or more PATH_... variables are missing from .env file.")
+        sys.exit(1)
+        
+    return db_config, paths_config
 
 # --- Database Logging Functions ---
 
@@ -87,10 +112,9 @@ def main():
     Implements try-catch logic and logs performance for each table.
     """
     logger = setup_logging()
-    config = read_config()
     
-    db_config = config['mysql']
-    paths = config['etl_paths']
+    # Updated to reflect the new read_config function
+    db_config, paths = read_config()
     
     # This list defines all the tables and their corresponding files
     tables_to_load = [
@@ -114,11 +138,10 @@ def main():
     try:
         # --- Connect to Database ---
         logger.info(f"Connecting to database '{db_config['database']}' on {db_config['host']}...")
+        
+        # This part is now cleaner as it just unpacks the db_config dict
         connection = mysql.connector.connect(
-            host=db_config['host'],
-            user=db_config['user'],
-            password=db_config['password'],
-            database=db_config['database'],
+            **db_config,
             allow_local_infile=True  # CRITICAL: This enables LOAD DATA LOCAL INFILE
         )
         
