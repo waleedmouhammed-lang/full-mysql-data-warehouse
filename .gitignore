@@ -1,0 +1,65 @@
+
+# --------------------
+# OS / environment
+# --------------------
+# macOS
+.DS_Store
+
+# --------------------
+# Editors / IDEs
+# --------------------
+.vscode/
+
+# --------------------
+# Language / runtime
+# --------------------
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.env
+dw-venv/
+.env
+
+# --------------------
+# Data / outputs (adjust to your repo)
+# --------------------
+# Ignore all dataset files (example) — uncomment to enable
+  datasets/
+  datasets/*.csv
+  Unused/
+# data/raw/
+# data/processed/
+
+# --------------------
+# Secrets / keys / credentials
+# --------------------
+*.key
+*.pem
+*.crt
+secrets.*
+*.env.local
+config.ini
+
+# --------------------
+# Other / misc
+# --------------------
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.lock
+
+# Keep this file tracked
+!.gitignore
+
+# --------------------
+# Project-specific patterns
+# --------------------
+# Add project-specific ignore patterns below:
+# <your-pattern-here>
