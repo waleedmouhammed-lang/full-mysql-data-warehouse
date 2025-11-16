@@ -1,1 +1,7 @@
-mysql-connector-python==8.0.33
+Package                Version
+---------------------- -------
+mysql-connector-python 8.0.33
+pip                    25.3
+protobuf               3.20.3
+python-dotenv          1.2.1
+setuptools             65.5.0
