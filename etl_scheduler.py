@@ -97,6 +97,7 @@ def main():
     schedule.every().day.at("06:00").do(run_daily_pipeline)
     
     # --- FOR SIMPLICITY: Run every 24 hours from now ---
+    # Instead we went to running the scheduler at 6:00 AM daily
     #schedule.every(30).seconds.do(run_daily_pipeline)
     
     # --- Run immediately on start, then schedule ---
