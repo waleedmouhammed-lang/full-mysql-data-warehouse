@@ -108,15 +108,12 @@ def log_etl_end(connection, log_id, start_time, status, message):
 
 def main():
     """
-    Main ETL function to truncate and load all Bronze tables.
-    Implements try-catch logic and logs performance for each table.
+    Main ETL function for INCREMENTAL load to Bronze tables.
+    Uses a staging table workflow for deduplication.
     """
     logger = setup_logging()
-    
-    # Updated to reflect the new read_config function
     db_config, paths = read_config()
     
-    # This list defines all the tables and their corresponding files
     tables_to_load = [
         ('crm_cust_info', paths.get('crm_cust_info')),
         ('crm_prd_info', paths.get('crm_prd_info')),
@@ -126,23 +123,16 @@ def main():
         ('erp_px_cat_g1v2', paths.get('erp_px_cat_g1v2'))
     ]
 
-    # Check if all paths are defined in config
-    if any(path is None for _, path in tables_to_load):
-        logger.error("CRITICAL: One or more file paths are missing in config.ini [etl_paths] section.")
-        sys.exit(1)
-
     connection = None
     log_id = None
-    process_start_time = datetime.now() # Used even if DB log fails
+    process_start_time = datetime.now()
     
     try:
         # --- Connect to Database ---
         logger.info(f"Connecting to database '{db_config['database']}' on {db_config['host']}...")
-        
-        # This part is now cleaner as it just unpacks the db_config dict
         connection = mysql.connector.connect(
             **db_config,
-            allow_local_infile=True  # CRITICAL: This enables LOAD DATA LOCAL INFILE
+            allow_local_infile=True
         )
         
         if not connection.is_connected():
@@ -150,78 +140,82 @@ def main():
             sys.exit(1)
             
         logger.info("Database connection successful.")
-        
-        # --- Log Start to DB Table ---
-        # Pass the whole connection object to the logging function
-        log_id, process_start_time = log_etl_start(connection, 'bronze_load_python')
+        log_id, process_start_time = log_etl_start(connection, 'bronze_incremental_load')
 
         # --- Begin Main Load Process ---
-        logger.info(f"Starting Bronze load process (Log ID: {log_id})...")
+        logger.info(f"Starting Bronze incremental load process (Log ID: {log_id})...")
         total_start_time = time.time()
+        total_new_rows = 0
 
-        # Create a single cursor for the main loop
         with connection.cursor() as cursor:
             for table_name, file_path in tables_to_load:
                 table_start_time = time.time()
+                
+                # Define the corresponding staging table
+                stg_table_name = f"stg_{table_name}"
+                
                 logger.info(f"Processing table: {table_name}...")
 
-                # 1. TRUNCATE table
-                logger.debug(f"Truncating {table_name}...")
-                cursor.execute(f"TRUNCATE TABLE {table_name}")
+                # 1. TRUNCATE the STAGING table
+                logger.debug(f"Truncating staging table: {stg_table_name}...")
+                cursor.execute(f"TRUNCATE TABLE {stg_table_name}")
                 
-                # 2. LOAD DATA
-                logger.debug(f"Loading data from {file_path} into {table_name}...")
+                # 2. LOAD DATA into the STAGING table
+                logger.debug(f"Loading data from {file_path} into {stg_table_name}...")
                 
-                # Use os.path.normpath and replace backslashes for Windows compatibility
-                import os
                 safe_file_path = os.path.normpath(file_path).replace('\\', '\\\\')
-
                 load_query = f"""
                     LOAD DATA LOCAL INFILE '{safe_file_path}'
-                    INTO TABLE {table_name}
+                    INTO TABLE {stg_table_name}
                     FIELDS TERMINATED BY ','
                     OPTIONALLY ENCLOSED BY '"'
                     LINES TERMINATED BY '\\r\\n'
                     IGNORE 1 LINES
                 """
                 cursor.execute(load_query)
+                rows_loaded_to_stage = cursor.rowcount
+                logger.info(f"Loaded {rows_loaded_to_stage} rows from file into {stg_table_name}.")
+
+                # 3. MERGE data from Staging to Final table (Add-Only)
+                # We use INSERT IGNORE, which leverages the UNIQUE KEY on the
+                # final table to silently skip any rows that already exist.
+                logger.debug(f"Merging new data from {stg_table_name} into {table_name}...")
+                merge_query = f"""
+                    INSERT IGNORE INTO {table_name}
+                    SELECT * FROM {stg_table_name}
+                """
+                cursor.execute(merge_query)
+                rows_inserted_to_final = cursor.rowcount
+                total_new_rows += rows_inserted_to_final
                 
-                # Commit after each table load
+                # Commit after each *full* table workflow (Stage + Merge)
                 connection.commit()
                 
                 table_duration = time.time() - table_start_time
-                logger.info(f"Successfully loaded {cursor.rowcount} rows into {table_name} in {table_duration:.2f} seconds.")
+                logger.info(f"Successfully processed {table_name} in {table_duration:.2f}s. New rows inserted: {rows_inserted_to_final} (out of {rows_loaded_to_stage} from file).")
 
         # --- Log Success ---
         total_duration = time.time() - total_start_time
-        success_message = f"All {len(tables_to_load)} tables loaded successfully in {total_duration:.2f} seconds."
+        success_message = f"All {len(tables_to_load)} tables processed successfully in {total_duration:.2f} seconds. Total new rows inserted: {total_new_rows}."
         logger.info(success_message)
         log_etl_end(connection, log_id, process_start_time, 'Success', success_message)
 
     except mysql.connector.Error as err:
-        # --- "CATCH" Block ---
-        # This catches any database-related error
         error_message = f"MySQL Error: {err.errno} - {err.msg}"
         logger.error(f"ETL FAILED. {error_message}")
-        
         if log_id and connection and connection.is_connected():
             log_etl_end(connection, log_id, process_start_time, 'Error', error_message)
-        sys.exit(1) # Exit with an error code
+        sys.exit(1)
 
     except Exception as e:
-        # --- General "CATCH" Block ---
-        # This catches any other error (e.g., config file issue, Python error)
         error_message = f"Non-DB Error: {str(e)}"
         logger.error(f"ETL FAILED. {error_message}")
-        
         if log_id and connection and connection.is_connected():
             log_etl_end(connection, log_id, process_start_time, 'Error', error_message)
-        sys.exit(1) # Exit with an error code
+        sys.exit(1)
 
     finally:
-        # --- "FINALLY" Block (Cleanup) ---
         if connection and connection.is_connected():
-            # No need to close cursor if using 'with' block, but doesn't hurt
             connection.close()
             logger.info("Database connection closed.")
 
