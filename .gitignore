@@ -29,6 +29,7 @@ dw-venv/
   datasets/
   datasets/*.csv
   Unused/
+  data_files/
 # data/raw/
 # data/processed/
 
@@ -48,6 +49,7 @@ config.ini
 # Logs
 *.log
 logs/
+*.out
 
 # Temporary files
 *.tmp
