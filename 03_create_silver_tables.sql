@@ -150,7 +150,7 @@ CREATE TABLE erp_px_cat_g1v2 (
     ID VARCHAR(20) PRIMARY KEY COMMENT 'Cleansed category ID',
     CAT VARCHAR(50) COMMENT 'Cleansed CAT',
     SUBCAT VARCHAR(50) COMMENT 'Cleansed SUBCAT',
-    MAINTENANCE BOOLEAN COMMENT 'Cast from Yes/No string',
+    MAINTENANCE VARCHAR(10) COMMENT 'Cast from Yes/No string',
     
     -- Metadata / Auditing Columns
     meta_created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was first created',
