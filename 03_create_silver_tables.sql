@@ -55,10 +55,11 @@ DROP TABLE IF EXISTS crm_prd_info;
 CREATE TABLE crm_prd_info (
     -- Cleansed & Casted Columns from Bronze
     prd_id INT PRIMARY KEY COMMENT 'Cast from VARCHAR. Primary business key.',
-    prd_key VARCHAR(50) NOT NULL COMMENT 'Cleansed prd_key, natural key',
+    prd_category VARCHAR(50) NOT NULL COMMENT 'Cleansed prd_category to link with product categories table',
+    prd_key VARCHAR(50) NOT NULL COMMENT 'Cleansed prd_key to link with the sales details table',
     prd_nm VARCHAR(255) COMMENT 'Cleansed prd_nm',
-    prd_cost DECIMAL(19, 4) NULL COMMENT 'Cast from prd_cost, allows NULLs for blanks',
-    prd_line VARCHAR(10) COMMENT 'Cleansed prd_line',
+    prd_cost DECIMAL(19, 4) COMMENT 'Cast from prd_cost, allows NULLs for blanks',
+    prd_line VARCHAR(15) COMMENT 'Cleansed prd_line',
     prd_start_dt DATE COMMENT 'Cast from prd_start_dt string',
     prd_end_dt DATE NULL COMMENT 'Cast from prd_end_dt, allows NULLs for active products',
     
@@ -67,7 +68,7 @@ CREATE TABLE crm_prd_info (
     meta_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was last updated',
     
     -- Indexes
-    UNIQUE KEY uq_prd_key (prd_key)
+    UNIQUE KEY uq_prd_key (prd_id)
 );
 
 /*
