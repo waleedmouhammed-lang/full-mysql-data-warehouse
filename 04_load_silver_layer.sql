@@ -2,16 +2,14 @@
 ================================================================================
 SCRIPT: 04_load_silver_layer.sql
 PURPOSE: Cleanses, transforms, and loads data from the Bronze layer into the 
-         Silver layer for all CRM and ERP tables.
-STRATEGY: Full Refresh (TRUNCATE and INSERT). 
-         This ensures idempotency (safe to re-run).
-TABLES LOADED:
-    1. crm_cust_info
-    2. crm_prd_info
-    3. crm_sales_details
-    4. erp_cust_az12
-    5. erp_loc_a101
-    6. erp_px_cat_g1v2
+         Silver layer.
+STRATEGY: Hybrid Model
+         1. Incremental "Upsert" (ON DUPLICATE KEY UPDATE) for Dimensions & Facts.
+            - Handles New Inserts AND Updates to existing records.
+            - Tables: crm_cust_info, crm_sales_details, erp_* tables.
+         2. Full Refresh (TRUNCATE + INSERT) for Product Info.
+            - Required to recalculate complex SCD Type 2 logic (LEAD function)
+            - Table: crm_prd_info
 ================================================================================
 */
 
@@ -19,10 +17,8 @@ TABLES LOADED:
 USE dw_silver;
 
 -- ========================================================================
---                      1. LOAD: crm_cust_info
+--                      1. LOAD: crm_cust_info (Incremental Upsert)
 -- ========================================================================
-TRUNCATE TABLE dw_silver.crm_cust_info;
-
 INSERT INTO dw_silver.crm_cust_info (
     cst_id,
     cst_key,
@@ -32,45 +28,45 @@ INSERT INTO dw_silver.crm_cust_info (
     cst_gndr,
     cst_create_date
 )
-SELECT
-    -- 1. Data Type Casting: Convert VARCHAR to SIGNED (INT).
-    CAST(NULLIF(TRIM(cst_id), '') AS SIGNED) AS cst_id,
-    
-    -- 2. Handle Empty Strings & Whitespace, then CAST to CHAR(20)
-    CAST(NULLIF(TRIM(cst_key), '') AS CHAR(20)) AS cst_key,
-    
-    -- 3. Handle Empty Strings & Whitespace, then CAST to CHAR(100)
-    CAST(NULLIF(TRIM(cst_firstname), '') AS CHAR(100)) AS cst_firstname,
-    
-    -- 4. Handle Empty Strings & Whitespace, then CAST to CHAR(100)
-    CAST(NULLIF(TRIM(cst_lastname), '') AS CHAR(100)) AS cst_lastname,
+SELECT * FROM (
+    -- Subquery to transform data BEFORE inserting
+    SELECT
+        CAST(NULLIF(TRIM(cst_id), '') AS SIGNED) AS cst_id,
+        CAST(NULLIF(TRIM(cst_key), '') AS CHAR(20)) AS cst_key,
+        CAST(NULLIF(TRIM(cst_firstname), '') AS CHAR(100)) AS cst_firstname,
+        CAST(NULLIF(TRIM(cst_lastname), '') AS CHAR(100)) AS cst_lastname,
+        CAST(CASE 
+            WHEN UPPER(TRIM(cst_marital_status)) = 'S' THEN 'Single'
+            WHEN UPPER(TRIM(cst_marital_status)) = 'M' THEN 'Married'
+            ELSE 'UnKnown' 
+        END AS CHAR(10)) AS cst_marital_status,
+        CAST(CASE 
+            WHEN UPPER(TRIM(cst_gndr)) = 'M' THEN 'Male'
+            WHEN UPPER(TRIM(cst_gndr)) = 'F' THEN 'Female'
+            ELSE 'UnKnown' 
+        END AS CHAR(10)) AS cst_gndr,
+        STR_TO_DATE(NULLIF(TRIM(cst_create_date), ''), '%Y-%m-%d') AS cst_create_date
+    FROM dw_bronze.crm_cust_info
+    WHERE NULLIF(TRIM(cst_id), '') IS NOT NULL 
+      AND NULLIF(TRIM(cst_key), '') IS NOT NULL
+) AS source
+ON DUPLICATE KEY UPDATE
+    cst_key         = source.cst_key,
+    cst_firstname   = source.cst_firstname,
+    cst_lastname    = source.cst_lastname,
+    cst_marital_status = source.cst_marital_status,
+    cst_gndr        = source.cst_gndr,
+    cst_create_date = source.cst_create_date,
+    meta_updated_at = NOW();
 
-    -- 5. Abbreviation Transformation, then CAST to CHAR(10)
-    CAST(CASE 
-        WHEN UPPER(TRIM(cst_marital_status)) = 'S' THEN 'Single'
-        WHEN UPPER(TRIM(cst_marital_status)) = 'M' THEN 'Married'
-        ELSE 'UnKnown' 
-    END AS CHAR(10)) AS cst_marital_status,
-
-    -- 6. Abbreviation Transformation, then CAST to CHAR(10)
-    CAST(CASE 
-        WHEN UPPER(TRIM(cst_gndr)) = 'M' THEN 'Male'
-        WHEN UPPER(TRIM(cst_gndr)) = 'F' THEN 'Female'
-        ELSE 'UnKnown' 
-    END AS CHAR(10)) AS cst_gndr,
-    
-    -- 7. String to Date Conversion: Safely convert string 'YYYY-MM-DD' to DATE.
-    STR_TO_DATE(NULLIF(TRIM(cst_create_date), ''), '%Y-%m-%d') AS cst_create_date
-FROM dw_bronze.crm_cust_info
-WHERE NULLIF(TRIM(cst_id), '') IS NOT NULL 
-  AND NULLIF(TRIM(cst_key), '') IS NOT NULL;
 
 -- ========================================================================
---                      2. LOAD: crm_prd_info
+--                      2. LOAD: crm_prd_info (Full Refresh)
 -- ========================================================================
+-- NOTE: Kept as Full Refresh to ensure SCD Type 2 date logic (LEAD) 
+-- works correctly across the entire history of the product.
 TRUNCATE TABLE dw_silver.crm_prd_info;
 
--- Step 5: Insert cleansed data from Bronze into Silver
 INSERT INTO dw_silver.crm_prd_info (
     prd_id,
     prd_category,
@@ -137,13 +133,11 @@ WHERE
     -- (prd_id, prd_key) are not NULL or empty.
     NULLIF(TRIM(prd_id), '') IS NOT NULL
     AND NULLIF(TRIM(prd_key), '') IS NOT NULL;
-    
-    
--- ========================================================================
---                      3. LOAD: crm_sales_details
--- ========================================================================
-TRUNCATE TABLE dw_silver.crm_sales_details;
 
+
+-- ========================================================================
+--                      3. LOAD: crm_sales_details (Incremental Upsert)
+-- ========================================================================
 INSERT INTO dw_silver.crm_sales_details (
     sls_ord_num,
     sls_prd_key,
@@ -155,108 +149,105 @@ INSERT INTO dw_silver.crm_sales_details (
     sls_quantity,
     sls_price
 )
-SELECT
-    -- 1. Cleanse and cast Primary Key
-    CAST(NULLIF(TRIM(sls_ord_num), '') AS CHAR(20)) AS sls_ord_num,
-    
-    -- 2. Cleanse and cast Primary Key
-    CAST(NULLIF(TRIM(sls_prd_key), '') AS CHAR(50)) AS sls_prd_key,
-
-    -- 3. Cleanse and cast Foreign Key
-    CAST(NULLIF(TRIM(sls_cust_id), '') AS SIGNED) AS sls_cust_id,
-
-    -- 4. String to Date Conversion (YYYYMMDD format): Check length exactly 8.
-    CASE 
-        WHEN CHAR_LENGTH(TRIM(sls_order_dt)) = 8 THEN STR_TO_DATE(TRIM(sls_order_dt), '%Y%m%d') 
-        ELSE NULL 
-    END AS sls_order_dt,
-
-    CASE 
-        WHEN CHAR_LENGTH(TRIM(sls_ship_dt)) = 8 THEN STR_TO_DATE(TRIM(sls_ship_dt), '%Y%m%d') 
-        ELSE NULL 
-    END AS sls_ship_dt,
-
-    CASE 
-        WHEN CHAR_LENGTH(TRIM(sls_due_dt)) = 8 THEN STR_TO_DATE(TRIM(sls_due_dt), '%Y%m%d') 
-        ELSE NULL 
-    END AS sls_due_dt,
-
-    -- 5. String to Numeric: Handle nulls/empty strings, default to 0.
-    CAST(COALESCE(NULLIF(TRIM(sls_sales), ''), 0) AS DECIMAL(19, 4)) AS sls_sales,
-    CAST(COALESCE(NULLIF(TRIM(sls_quantity), ''), 0) AS SIGNED) AS sls_quantity,
-    CAST(COALESCE(NULLIF(TRIM(sls_price), ''), 0) AS DECIMAL(19, 4)) AS sls_price
-FROM dw_bronze.crm_sales_details
-WHERE NULLIF(TRIM(sls_ord_num), '') IS NOT NULL
-  AND NULLIF(TRIM(sls_prd_key), '') IS NOT NULL
-  AND NULLIF(TRIM(sls_cust_id), '') IS NOT NULL;
+SELECT * FROM (
+    SELECT
+        CAST(NULLIF(TRIM(sls_ord_num), '') AS CHAR(20)) AS sls_ord_num,
+        CAST(NULLIF(TRIM(sls_prd_key), '') AS CHAR(50)) AS sls_prd_key,
+        CAST(NULLIF(TRIM(sls_cust_id), '') AS SIGNED) AS sls_cust_id,
+        CASE 
+            WHEN CHAR_LENGTH(TRIM(sls_order_dt)) = 8 THEN STR_TO_DATE(TRIM(sls_order_dt), '%Y%m%d') 
+            ELSE NULL 
+        END AS sls_order_dt,
+        CASE 
+            WHEN CHAR_LENGTH(TRIM(sls_ship_dt)) = 8 THEN STR_TO_DATE(TRIM(sls_ship_dt), '%Y%m%d') 
+            ELSE NULL 
+        END AS sls_ship_dt,
+        CASE 
+            WHEN CHAR_LENGTH(TRIM(sls_due_dt)) = 8 THEN STR_TO_DATE(TRIM(sls_due_dt), '%Y%m%d') 
+            ELSE NULL 
+        END AS sls_due_dt,
+        CAST(COALESCE(NULLIF(TRIM(sls_sales), ''), 0) AS DECIMAL(19, 4)) AS sls_sales,
+        CAST(COALESCE(NULLIF(TRIM(sls_quantity), ''), 0) AS SIGNED) AS sls_quantity,
+        CAST(COALESCE(NULLIF(TRIM(sls_price), ''), 0) AS DECIMAL(19, 4)) AS sls_price
+    FROM dw_bronze.crm_sales_details
+    WHERE NULLIF(TRIM(sls_ord_num), '') IS NOT NULL
+      AND NULLIF(TRIM(sls_prd_key), '') IS NOT NULL
+      AND NULLIF(TRIM(sls_cust_id), '') IS NOT NULL
+) AS source
+ON DUPLICATE KEY UPDATE
+    sls_cust_id     = source.sls_cust_id,
+    sls_order_dt    = source.sls_order_dt,
+    sls_ship_dt     = source.sls_ship_dt,
+    sls_due_dt      = source.sls_due_dt,
+    sls_sales       = source.sls_sales,
+    sls_quantity    = source.sls_quantity,
+    sls_price       = source.sls_price,
+    meta_updated_at = NOW();
 
 
 -- ========================================================================
---                      4. LOAD: erp_cust_az12
+--                      4. LOAD: erp_cust_az12 (Incremental Upsert)
 -- ========================================================================
-TRUNCATE TABLE dw_silver.erp_cust_az12;
-
 INSERT INTO dw_silver.erp_cust_az12 (CID, BDATE, GEN)
-SELECT
-    -- 1. CID Transformation: Remove "NAS" prefix if present.
-    CAST(CASE 
-        WHEN LEFT(TRIM(CID), 3) = 'NAS' THEN SUBSTRING(TRIM(CID), 4)
-        ELSE TRIM(CID)
-    END AS CHAR(20)) AS CID,
-
-    -- 2. Date Conversion (Format: YYYY-MM-DD): Check length exactly 10.
-    CASE 
-        WHEN CHAR_LENGTH(TRIM(BDATE)) = 10 THEN STR_TO_DATE(TRIM(BDATE), '%Y-%m-%d') 
-        ELSE NULL 
-    END AS BDATE,
-
-    -- 3. Gender Transformation: Trim and cast.
-    CAST(NULLIF(TRIM(GEN), '') AS CHAR(10)) AS GEN
-FROM dw_bronze.erp_cust_az12
-WHERE NULLIF(TRIM(CID), '') IS NOT NULL;
+SELECT * FROM (
+    SELECT
+        CAST(CASE 
+            WHEN LEFT(TRIM(CID), 3) = 'NAS' THEN SUBSTRING(TRIM(CID), 4)
+            ELSE TRIM(CID)
+        END AS CHAR(20)) AS CID,
+        CASE 
+            WHEN CHAR_LENGTH(TRIM(BDATE)) = 10 THEN STR_TO_DATE(TRIM(BDATE), '%Y-%m-%d') 
+            ELSE NULL 
+        END AS BDATE,
+        CAST(NULLIF(TRIM(GEN), '') AS CHAR(10)) AS GEN
+    FROM dw_bronze.erp_cust_az12
+    WHERE NULLIF(TRIM(CID), '') IS NOT NULL
+) AS source
+ON DUPLICATE KEY UPDATE
+    BDATE           = source.BDATE,
+    GEN             = source.GEN,
+    meta_updated_at = NOW();
 
 
 -- ========================================================================
---                      5. LOAD: erp_loc_a101
+--                      5. LOAD: erp_loc_a101 (Incremental Upsert)
 -- ========================================================================
-TRUNCATE TABLE dw_silver.erp_loc_a101;
-
 INSERT INTO dw_silver.erp_loc_a101 (CID, CNTRY)
-SELECT
-    -- 1. CID Transformation: Remove dashes ('-').
-    CAST(REPLACE(NULLIF(TRIM(CID), ''), '-', '') AS CHAR(20)) AS CID,
-
-    -- 2. Country Standardization: Normalize 'US'/'USA' to 'United States'.
-    CAST(CASE 
-        WHEN TRIM(CNTRY) = 'US' THEN 'United States'
-        WHEN TRIM(CNTRY) = 'USA' THEN 'United States'
-        ELSE TRIM(CNTRY)
-    END AS CHAR(50)) AS CNTRY
-FROM dw_bronze.erp_loc_a101
-WHERE NULLIF(TRIM(CID), '') IS NOT NULL;
+SELECT * FROM (
+    SELECT
+        CAST(REPLACE(NULLIF(TRIM(CID), ''), '-', '') AS CHAR(20)) AS CID,
+        CAST(CASE 
+            WHEN TRIM(CNTRY) = 'US' THEN 'United States'
+            WHEN TRIM(CNTRY) = 'USA' THEN 'United States'
+            ELSE TRIM(CNTRY)
+        END AS CHAR(50)) AS CNTRY
+    FROM dw_bronze.erp_loc_a101
+    WHERE NULLIF(TRIM(CID), '') IS NOT NULL
+) AS source
+ON DUPLICATE KEY UPDATE
+    CNTRY           = source.CNTRY,
+    meta_updated_at = NOW();
 
 
 -- ========================================================================
---                      6. LOAD: erp_px_cat_g1v2
+--                      6. LOAD: erp_px_cat_g1v2 (Incremental Upsert)
 -- ========================================================================
-TRUNCATE TABLE dw_silver.erp_px_cat_g1v2;
-
 INSERT INTO dw_silver.erp_px_cat_g1v2 (ID, CAT, SUBCAT, MAINTENANCE)
-SELECT
-    -- 1. Cleanse and cast ID.
-    CAST(NULLIF(TRIM(ID), '') AS CHAR(20)) AS ID,
-
-    -- 2. Cleanse and cast Category.
-    CAST(NULLIF(TRIM(CAT), '') AS CHAR(50)) AS CAT,
-
-    -- 3. Cleanse and cast Sub-Category.
-    CAST(NULLIF(TRIM(SUBCAT), '') AS CHAR(50)) AS SUBCAT,
-
-    -- 4. Maintenance Transformation: Convert 'Yes'/'No' to Boolean (1/0).
-    CASE 
-        WHEN TRIM(MAINTENANCE) = 'Yes' THEN 1
-        WHEN TRIM(MAINTENANCE) = 'No' THEN 0
-        ELSE NULL 
-    END AS MAINTENANCE
-FROM dw_bronze.erp_px_cat_g1v2
-WHERE NULLIF(TRIM(ID), '') IS NOT NULL;
+SELECT * FROM (
+    SELECT
+        CAST(NULLIF(TRIM(ID), '') AS CHAR(20)) AS ID,
+        CAST(NULLIF(TRIM(CAT), '') AS CHAR(50)) AS CAT,
+        CAST(NULLIF(TRIM(SUBCAT), '') AS CHAR(50)) AS SUBCAT,
+        CASE 
+            WHEN TRIM(MAINTENANCE) = 'Yes' THEN 1
+            WHEN TRIM(MAINTENANCE) = 'No' THEN 0
+            ELSE NULL 
+        END AS MAINTENANCE
+    FROM dw_bronze.erp_px_cat_g1v2
+    WHERE NULLIF(TRIM(ID), '') IS NOT NULL
+) AS source
+ON DUPLICATE KEY UPDATE
+    CAT             = source.CAT,
+    SUBCAT          = source.SUBCAT,
+    MAINTENANCE     = source.MAINTENANCE,
+    meta_updated_at = NOW();
