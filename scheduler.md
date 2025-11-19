@@ -49,7 +49,7 @@ Step 4: Run the Background Command
 
 Now, run the following command. This is the main instruction:
 
-nohup python schedule_etl.py > scheduler.out 2>&1 &
+nohup python etl_scheduler.py > scheduler.out 2>&1 &
 
 
 Your terminal will show something like [1] 12345 (that's the Process ID) and then immediately give you your prompt back. The script is now running in the background.

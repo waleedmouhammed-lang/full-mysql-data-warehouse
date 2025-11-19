@@ -219,6 +219,7 @@ SELECT * FROM (
         CAST(CASE 
             WHEN TRIM(CNTRY) = 'US' THEN 'United States'
             WHEN TRIM(CNTRY) = 'USA' THEN 'United States'
+            WHEN TRIM(CNTRY) = 'DE' THEN 'Denmark'
             ELSE TRIM(CNTRY)
         END AS CHAR(50)) AS CNTRY
     FROM dw_bronze.erp_loc_a101
