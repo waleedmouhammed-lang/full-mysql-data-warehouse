@@ -98,10 +98,10 @@ def main():
         logging.warning("WARNING: Database credentials not found in environment variables.")
     # --- FOR TESTING: Run the pipeline every 1 minute ---
     # Comment this out for production
-    schedule.every(1).minutes.do(run_daily_pipeline)
+    # schedule.every(1).minutes.do(run_daily_pipeline)
 
     # --- Schedule Configuration ---
-    # schedule.every().day.at("06:00").do(run_daily_pipeline)
+    schedule.every().day.at("06:00").do(run_daily_pipeline)
     
     # --- FOR TESTING: Run immediately on startup ---
     # logging.info("Running initial pipeline test on startup...")
