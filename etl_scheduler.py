@@ -104,8 +104,8 @@ def main():
     schedule.every().day.at("06:00").do(run_daily_pipeline)
     
     # --- FOR TESTING: Run immediately on startup ---
-    # logging.info("Running initial pipeline test on startup...")
-    # run_daily_pipeline()
+    logging.info("Running initial pipeline test on startup...")
+    run_daily_pipeline()
     
     logging.info("Scheduler is active. Waiting for next scheduled run...")
     
