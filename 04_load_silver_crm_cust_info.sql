@@ -1,21 +1,20 @@
 /*
 ================================================================================
 SCRIPT: 04_load_silver_crm_cust_info.sql
-PURPOSE: Cleanses and transforms data from the Bronze crm_cust_info table
-         and inserts it into the Silver crm_cust_info table.
-STRATEGY: Full Refresh (TRUNCATE and INSERT).
-          This makes the job idempotent (safe to re-run).
+PURPOSE: SQL Server single-table silver load for crm_cust_info.
+NOTE: The full silver load is in 04_load_silver_layer.sql.
 ================================================================================
 */
 
--- Step 1: Switch to the Silver database
-USE dw_silver;
+USE DataWarehouse;
+GO
 
--- Step 2: Truncate the target Silver table (Full Refresh)
-TRUNCATE TABLE dw_silver.crm_cust_info;
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
 
--- Step 3: Insert cleansed data from Bronze into Silver
-INSERT INTO dw_silver.crm_cust_info (
+DELETE FROM silver.crm_cust_info;
+
+INSERT INTO silver.crm_cust_info (
     cst_id,
     cst_key,
     cst_firstname,
@@ -23,40 +22,26 @@ INSERT INTO dw_silver.crm_cust_info (
     cst_marital_status,
     cst_gndr,
     cst_create_date
-    -- Metadata columns (meta_created_at, meta_updated_at)
-    -- will be auto-populated by their DEFAULT definitions.
 )
 SELECT
-    -- 1. Data Type Casting: Convert VARCHAR to INT
-    cast(cst_id AS SIGNED) AS cst_id,
-    
-    -- 2. Handle Empty Strings & Whitespace: TRIM() and convert '' to NULL
-    NULLIF(TRIM(cst_key), '') AS cst_key,
-    NULLIF(TRIM(cst_firstname), '') AS cst_firstname,
-    NULLIF(TRIM(cst_lastname), '') AS cst_lastname,
-
-    -- 3. Abbreviation Transformation: Convert abbreviations to full names
-    CASE 
+    TRY_CONVERT(INT, NULLIF(TRIM(cst_id), '')) AS cst_id,
+    CONVERT(VARCHAR(20), NULLIF(TRIM(cst_key), '')) AS cst_key,
+    CONVERT(VARCHAR(100), NULLIF(TRIM(cst_firstname), '')) AS cst_firstname,
+    CONVERT(VARCHAR(100), NULLIF(TRIM(cst_lastname), '')) AS cst_lastname,
+    CONVERT(VARCHAR(10), CASE
         WHEN UPPER(TRIM(cst_marital_status)) = 'S' THEN 'Single'
         WHEN UPPER(TRIM(cst_marital_status)) = 'M' THEN 'Married'
-        ELSE 'UnKnown' -- Set unknowns, blanks, or other values to NULL
-    END AS cst_marital_status,
-
-    CASE 
+        ELSE 'UnKnown'
+    END) AS cst_marital_status,
+    CONVERT(VARCHAR(10), CASE
         WHEN UPPER(TRIM(cst_gndr)) = 'M' THEN 'Male'
         WHEN UPPER(TRIM(cst_gndr)) = 'F' THEN 'Female'
-        ELSE 'UnKnown' -- Set unknowns, blanks, or other values to NULL
-    END AS cst_gndr,
-    
-    -- 4. String to Date Conversion: Convert string 'YYYY-MM-DD' to DATE
-    STR_TO_DATE(NULLIF(TRIM(cst_create_date), ''), '%Y-%m-%d') AS cst_create_date
-    
-FROM
-    dw_bronze.crm_cust_info
-WHERE
-    TRIM(cst_id) != ''
-        AND NULLIF(TRIM(cst_id), '') IS NOT NULL;
+        ELSE 'UnKnown'
+    END) AS cst_gndr,
+    TRY_CONVERT(DATE, NULLIF(TRIM(cst_create_date), ''), 23) AS cst_create_date
+FROM bronze.crm_cust_info
+WHERE TRY_CONVERT(INT, NULLIF(TRIM(cst_id), '')) IS NOT NULL
+  AND NULLIF(TRIM(cst_key), '') IS NOT NULL;
 
-
-
-
+COMMIT TRANSACTION;
+GO

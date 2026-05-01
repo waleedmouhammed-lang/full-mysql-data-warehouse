@@ -51,6 +51,11 @@ config.ini
 logs/
 *.out
 
+# dbt artifacts
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+
 # Temporary files
 *.tmp
 *.temp

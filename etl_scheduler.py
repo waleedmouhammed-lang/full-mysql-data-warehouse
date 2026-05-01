@@ -1,117 +1,93 @@
-import schedule
-import time
-import subprocess
 import logging
-import sys
-from datetime import datetime
 import os
+import subprocess
+import sys
+import time
 
-# --- Configuration ---
-# Set up logging
+import schedule
+
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('scheduler.log')
-    ]
+        logging.FileHandler("scheduler.log"),
+    ],
 )
 
-# Scripts to run
-DATA_GENERATOR_SCRIPT = 'data_generator.py'
-BRONZE_LOAD_SCRIPT = 'run_bronze_load.py'
-SILVER_LOAD_SCRIPT = 'run_silver_load.py'
-GOLD_LOAD_SCRIPT   = 'run_gold_load.py'  # Added Gold Script
+DATA_GENERATOR_SCRIPT = "data_generator.py"
+BRONZE_LOAD_SCRIPT = "run_bronze_load.py"
+SILVER_LOAD_SCRIPT = "run_silver_load.py"
+GOLD_LOAD_SCRIPT = "run_gold_load.py"
 
-# --- Job Functions ---
 
-def run_script(script_name):
-    """Helper function to run a Python script using subprocess."""
-    logging.info(f"Attempting to run script: {script_name}...")
+def run_command(command, label):
+    logging.info("Running %s: %s", label, " ".join(command))
     try:
-        # Use sys.executable to ensure we use the same Python environment
         result = subprocess.run(
-            [sys.executable, script_name], 
-            check=True, 
-            capture_output=True, 
+            command,
+            check=True,
+            capture_output=True,
             text=True,
-            env=os.environ.copy() # Explicitly pass environment variables
+            env=os.environ.copy(),
         )
-        
-        logging.info(f"Successfully ran {script_name}.")
-        logging.debug(f"--- {script_name} STDOUT ---\n{result.stdout}")
+        if result.stdout:
+            logging.info("%s stdout:\n%s", label, result.stdout)
         return True
-        
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Script {script_name} failed with exit code {e.returncode}.")
-        logging.debug(f"--- {script_name} STDERR ---\n{e.stderr}")
-        if e.stdout:
-            logging.debug(f"--- {script_name} STDOUT (Partial) ---\n{e.stdout}")
+    except subprocess.CalledProcessError as exc:
+        logging.error("%s failed with exit code %s.", label, exc.returncode)
+        if exc.stdout:
+            logging.error("%s stdout:\n%s", label, exc.stdout)
+        if exc.stderr:
+            logging.error("%s stderr:\n%s", label, exc.stderr)
         return False
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while running {script_name}: {e}")
-        return False
+
+
+def run_python_script(script_name):
+    return run_command([sys.executable, script_name], script_name)
+
 
 def run_daily_pipeline():
-    """
-    Orchestrates the execution of the daily ETL pipeline.
-    Sequence: Generate -> Bronze -> Silver -> Gold
-    """
-    logging.info("=== STARTING DAILY ETL PIPELINE ===")
-    
-    # --- Step 1: Data Generation ---
-    logging.info("--- Step 1: Running Data Generator ---")
-    if not run_script(DATA_GENERATOR_SCRIPT):
-        logging.error("Data generation failed. Aborting pipeline.")
-        logging.info("=== DAILY ETL PIPELINE FAILED (at Step 1: Generation) ===")
-        return
+    logging.info("=== STARTING DAILY SQL SERVER ETL PIPELINE ===")
 
-    # --- Step 2: Bronze Load ---
-    logging.info("--- Step 2: Running Bronze Load ---")
-    if not run_script(BRONZE_LOAD_SCRIPT):
-        logging.error("Bronze load failed. Aborting pipeline.")
-        logging.info("=== DAILY ETL PIPELINE FAILED (at Step 2: Bronze Load) ===")
-        return
+    steps = [
+        ("Generate source data", lambda: run_python_script(DATA_GENERATOR_SCRIPT)),
+        ("Load bronze", lambda: run_python_script(BRONZE_LOAD_SCRIPT)),
+        ("Load silver", lambda: run_python_script(SILVER_LOAD_SCRIPT)),
+        ("Load gold", lambda: run_python_script(GOLD_LOAD_SCRIPT)),
+    ]
 
-    # --- Step 3: Silver Load ---
-    logging.info("--- Step 3: Running Silver Load ---")
-    if not run_script(SILVER_LOAD_SCRIPT):
-        logging.error("Silver load failed. Aborting pipeline.")
-        logging.info("=== DAILY ETL PIPELINE FAILED (at Step 3: Silver Load) ===")
-        return
+    for step_name, step_callable in steps:
+        logging.info("--- %s ---", step_name)
+        if not step_callable():
+            logging.error("=== PIPELINE FAILED at step: %s ===", step_name)
+            return False
 
-    # --- Step 4: Gold Load ---
-    logging.info("--- Step 4: Running Gold Load ---")
-    if run_script(GOLD_LOAD_SCRIPT):
-        logging.info("=== DAILY ETL PIPELINE FINISHED SUCCESSFULLY ===")
-    else:
-        logging.error("Gold load failed.")
-        logging.info("=== DAILY ETL PIPELINE FAILED (at Step 4: Gold Load) ===")
+    logging.info("=== DAILY SQL SERVER ETL PIPELINE FINISHED SUCCESSFULLY ===")
+    return True
 
-# --- Scheduler Setup ---
 
 def main():
-    logging.info("ETL Scheduler started.")
-    
-    # Validation
-    if not os.getenv('DB_USER') or not os.getenv('DB_PASSWORD'):
-        logging.warning("WARNING: Database credentials not found in environment variables.")
-    # --- FOR TESTING: Run the pipeline every 1 minute ---
-    # Comment this out for production
-    # schedule.every(1).minutes.do(run_daily_pipeline)
+    logging.info("ETL scheduler started.")
 
-    # --- Schedule Configuration ---
-    schedule.every().day.at("06:00").do(run_daily_pipeline)
-    
-    # --- FOR TESTING: Run immediately on startup ---
-    logging.info("Running initial pipeline test on startup...")
-    run_daily_pipeline()
-    
-    logging.info("Scheduler is active. Waiting for next scheduled run...")
-    
+    if not os.getenv("SQLSERVER_PASSWORD"):
+        logging.warning("SQLSERVER_PASSWORD is not set. Database steps will fail until it is configured.")
+
+    run_on_startup = os.getenv("RUN_PIPELINE_ON_STARTUP", "true").lower() == "true"
+    schedule_time = os.getenv("PIPELINE_SCHEDULE_TIME", "06:00")
+
+    schedule.every().day.at(schedule_time).do(run_daily_pipeline)
+
+    if run_on_startup:
+        logging.info("Running initial pipeline on startup.")
+        run_daily_pipeline()
+
+    logging.info("Scheduler is active. Waiting for the next run at %s.", schedule_time)
     while True:
         schedule.run_pending()
         time.sleep(1)
+
 
 if __name__ == "__main__":
     main()

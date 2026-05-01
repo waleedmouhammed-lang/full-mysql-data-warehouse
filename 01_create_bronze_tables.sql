@@ -1,88 +1,150 @@
 /*
 ================================================================================
 SCRIPT: 01_create_bronze_tables.sql
-PURPOSE: Defines and creates all table structures in the Bronze layer.
-         ** INCREMENTAL LOAD VERSION **
-STRATEGY: We add UNIQUE KEY constraints to the business keys.
-          This allows us to use `INSERT IGNORE` or `ON DUPLICATE KEY UPDATE`
-          to create an idempotent, incremental load.
-          All columns remain VARCHAR(255) for resilience.
+PURPOSE: Creates SQL Server bronze tables for raw, string-first data capture.
+
+Bronze tables keep source values as VARCHAR, plus load metadata:
+  - batch_id
+  - source_file
+  - source_row_number
+  - loaded_at
+  - row_hash
 ================================================================================
 */
 
-USE dw_bronze;
+USE DataWarehouse;
+GO
 
-/*
-================================================================================
-Section 1: Bronze Table Schema Definition
-Purpose: Create the table structures if they do not already exist.
-Strategy: We use `CREATE TABLE IF NOT EXISTS` so this script is safe
-          to re-run. It will not destroy or alter existing tables.
-          All columns remain VARCHAR(255) for a resilient raw-data-capture.
-================================================================================
-*/
--- Primary key check -- Dina
--- Ensuring that fully duplicated row is eliminated -- Fatema
--- Table: CRM Customer Info
-CREATE TABLE IF NOT EXISTS crm_cust_info(
-    cst_id VARCHAR(255),
-    cst_key VARCHAR(255),
-    cst_firstname VARCHAR(255),
-    cst_lastname VARCHAR(255),
-    cst_marital_status VARCHAR(255),
-    cst_gndr VARCHAR(255),
-    cst_create_date VARCHAR(255),
-    UNIQUE KEY idx_cst_id (cst_id) -- Business key for deduplication
-);
+IF OBJECT_ID(N'bronze.crm_cust_info', N'U') IS NULL
+BEGIN
+    CREATE TABLE bronze.crm_cust_info (
+        bronze_record_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_bronze_crm_cust_info PRIMARY KEY,
+        cst_id VARCHAR(255) NULL,
+        cst_key VARCHAR(255) NULL,
+        cst_firstname VARCHAR(255) NULL,
+        cst_lastname VARCHAR(255) NULL,
+        cst_marital_status VARCHAR(255) NULL,
+        cst_gndr VARCHAR(255) NULL,
+        cst_create_date VARCHAR(255) NULL,
+        batch_id UNIQUEIDENTIFIER NOT NULL,
+        source_file NVARCHAR(4000) NOT NULL,
+        source_row_number INT NOT NULL,
+        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_crm_cust_info_loaded_at DEFAULT SYSUTCDATETIME(),
+        row_hash VARBINARY(32) NOT NULL
+    );
 
--- Table: CRM Product Info
-CREATE TABLE IF NOT EXISTS crm_prd_info(
-    prd_id VARCHAR(255),
-    prd_key VARCHAR(255),
-    prd_nm VARCHAR(255),
-    prd_cost VARCHAR(255),
-    prd_line VARCHAR(255),
-    prd_start_dt VARCHAR(255),
-    prd_end_dt VARCHAR(255),
-    UNIQUE key idx_prd_id (prd_id) -- Business key for deduplication
-);
+    CREATE UNIQUE INDEX ux_bronze_crm_cust_info_cst_id
+        ON bronze.crm_cust_info(cst_id)
+        WHERE cst_id IS NOT NULL;
+END;
+GO
 
--- Table: CRM Sales Details
-CREATE TABLE IF NOT EXISTS crm_sales_details(
-    sls_ord_num VARCHAR(255),
-    sls_prd_key VARCHAR(255),
-    sls_cust_id VARCHAR(255),
-    sls_order_dt VARCHAR(255),
-    sls_ship_dt VARCHAR(255),
-    sls_due_dt VARCHAR(255),
-    sls_sales VARCHAR(255),
-    sls_quantity VARCHAR(255),
-    sls_price VARCHAR(255),
-    UNIQUE KEY idx_sales_detail (sls_ord_num, sls_prd_key) -- Business key for deduplication
-);
+IF OBJECT_ID(N'bronze.crm_prd_info', N'U') IS NULL
+BEGIN
+    CREATE TABLE bronze.crm_prd_info (
+        bronze_record_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_bronze_crm_prd_info PRIMARY KEY,
+        prd_id VARCHAR(255) NULL,
+        prd_key VARCHAR(255) NULL,
+        prd_nm VARCHAR(255) NULL,
+        prd_cost VARCHAR(255) NULL,
+        prd_line VARCHAR(255) NULL,
+        prd_start_dt VARCHAR(255) NULL,
+        prd_end_dt VARCHAR(255) NULL,
+        batch_id UNIQUEIDENTIFIER NOT NULL,
+        source_file NVARCHAR(4000) NOT NULL,
+        source_row_number INT NOT NULL,
+        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_crm_prd_info_loaded_at DEFAULT SYSUTCDATETIME(),
+        row_hash VARBINARY(32) NOT NULL
+    );
 
--- Table: ERP Customer Demographics
-CREATE TABLE IF NOT EXISTS erp_cust_az12(
-    CID VARCHAR(255),
-    BDATE VARCHAR(255),
-    GEN VARCHAR(255),
-    UNIQUE KEY idx_cid (CID) -- Business key for deduplication
-);
+    CREATE UNIQUE INDEX ux_bronze_crm_prd_info_prd_id
+        ON bronze.crm_prd_info(prd_id)
+        WHERE prd_id IS NOT NULL;
+END;
+GO
 
--- Table: ERP Customer Location
-CREATE TABLE IF NOT EXISTS erp_loc_a101(
-    CID VARCHAR(255),
-    CNTRY VARCHAR(255),
-    UNIQUE KEY idx_cid (CID) -- Business key for deduplication
-);
+IF OBJECT_ID(N'bronze.crm_sales_details', N'U') IS NULL
+BEGIN
+    CREATE TABLE bronze.crm_sales_details (
+        bronze_record_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_bronze_crm_sales_details PRIMARY KEY,
+        sls_ord_num VARCHAR(255) NULL,
+        sls_prd_key VARCHAR(255) NULL,
+        sls_cust_id VARCHAR(255) NULL,
+        sls_order_dt VARCHAR(255) NULL,
+        sls_ship_dt VARCHAR(255) NULL,
+        sls_due_dt VARCHAR(255) NULL,
+        sls_sales VARCHAR(255) NULL,
+        sls_quantity VARCHAR(255) NULL,
+        sls_price VARCHAR(255) NULL,
+        batch_id UNIQUEIDENTIFIER NOT NULL,
+        source_file NVARCHAR(4000) NOT NULL,
+        source_row_number INT NOT NULL,
+        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_crm_sales_details_loaded_at DEFAULT SYSUTCDATETIME(),
+        row_hash VARBINARY(32) NOT NULL
+    );
 
--- Table: ERP Product Category
-CREATE TABLE IF NOT EXISTS erp_px_cat_g1v2(
-    ID VARCHAR(255),
-    CAT VARCHAR(255),
-    SUBCAT VARCHAR(255),
-    MAINTENANCE VARCHAR(255),
-    UNIQUE KEY idx_id (ID) -- Business key for deduplication
-);
+    CREATE UNIQUE INDEX ux_bronze_crm_sales_details_order_product
+        ON bronze.crm_sales_details(sls_ord_num, sls_prd_key)
+        WHERE sls_ord_num IS NOT NULL AND sls_prd_key IS NOT NULL;
+END;
+GO
 
--- End of script --
+IF OBJECT_ID(N'bronze.erp_cust_az12', N'U') IS NULL
+BEGIN
+    CREATE TABLE bronze.erp_cust_az12 (
+        bronze_record_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_bronze_erp_cust_az12 PRIMARY KEY,
+        CID VARCHAR(255) NULL,
+        BDATE VARCHAR(255) NULL,
+        GEN VARCHAR(255) NULL,
+        batch_id UNIQUEIDENTIFIER NOT NULL,
+        source_file NVARCHAR(4000) NOT NULL,
+        source_row_number INT NOT NULL,
+        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_erp_cust_az12_loaded_at DEFAULT SYSUTCDATETIME(),
+        row_hash VARBINARY(32) NOT NULL
+    );
+
+    CREATE UNIQUE INDEX ux_bronze_erp_cust_az12_cid
+        ON bronze.erp_cust_az12(CID)
+        WHERE CID IS NOT NULL;
+END;
+GO
+
+IF OBJECT_ID(N'bronze.erp_loc_a101', N'U') IS NULL
+BEGIN
+    CREATE TABLE bronze.erp_loc_a101 (
+        bronze_record_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_bronze_erp_loc_a101 PRIMARY KEY,
+        CID VARCHAR(255) NULL,
+        CNTRY VARCHAR(255) NULL,
+        batch_id UNIQUEIDENTIFIER NOT NULL,
+        source_file NVARCHAR(4000) NOT NULL,
+        source_row_number INT NOT NULL,
+        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_erp_loc_a101_loaded_at DEFAULT SYSUTCDATETIME(),
+        row_hash VARBINARY(32) NOT NULL
+    );
+
+    CREATE UNIQUE INDEX ux_bronze_erp_loc_a101_cid
+        ON bronze.erp_loc_a101(CID)
+        WHERE CID IS NOT NULL;
+END;
+GO
+
+IF OBJECT_ID(N'bronze.erp_px_cat_g1v2', N'U') IS NULL
+BEGIN
+    CREATE TABLE bronze.erp_px_cat_g1v2 (
+        bronze_record_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_bronze_erp_px_cat_g1v2 PRIMARY KEY,
+        ID VARCHAR(255) NULL,
+        CAT VARCHAR(255) NULL,
+        SUBCAT VARCHAR(255) NULL,
+        MAINTENANCE VARCHAR(255) NULL,
+        batch_id UNIQUEIDENTIFIER NOT NULL,
+        source_file NVARCHAR(4000) NOT NULL,
+        source_row_number INT NOT NULL,
+        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_erp_px_cat_g1v2_loaded_at DEFAULT SYSUTCDATETIME(),
+        row_hash VARBINARY(32) NOT NULL
+    );
+
+    CREATE UNIQUE INDEX ux_bronze_erp_px_cat_g1v2_id
+        ON bronze.erp_px_cat_g1v2(ID)
+        WHERE ID IS NOT NULL;
+END;
+GO

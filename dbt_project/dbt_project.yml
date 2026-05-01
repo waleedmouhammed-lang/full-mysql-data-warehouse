@@ -1,0 +1,21 @@
+name: sqlserver_warehouse
+version: "1.0.0"
+config-version: 2
+
+profile: sqlserver_warehouse
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  sqlserver_warehouse:
+    silver:
+      +materialized: table
+      +schema: silver
+    gold:
+      +materialized: table
+      +schema: gold

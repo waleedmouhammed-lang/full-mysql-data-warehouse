@@ -4,6 +4,7 @@ from faker import Faker
 from datetime import datetime, timedelta
 import os
 import logging
+from dotenv import load_dotenv
 
 # --- Configuration ---
 # Set up logging
@@ -16,15 +17,18 @@ logging.basicConfig(
     ]
 )
 
-# File paths from your .env (or define here)
-BASE_PATH = 'data_files/' 
+load_dotenv()
+
+# File paths from your .env (or default local data_files directory)
+BASE_PATH = os.getenv('SOURCE_BASE_PATH', 'data_files/')
+os.makedirs(BASE_PATH, exist_ok=True)
 file_paths = {
-    'crm_cust_info': os.path.join(BASE_PATH, 'cust_info.csv'),
-    'crm_sales_details': os.path.join(BASE_PATH, 'sales_details.csv'),
-    'crm_prd_info': os.path.join(BASE_PATH, 'prd_info.csv'),
-    'erp_cust_az12': os.path.join(BASE_PATH, 'CUST_AZ12.csv'),
-    'erp_loc_a101': os.path.join(BASE_PATH, 'LOC_A101.csv'),
-    'erp_px_cat_g1v2': os.path.join(BASE_PATH, 'PX_CAT_G1V2.csv')
+    'crm_cust_info': os.getenv('PATH_CRM_CUST_INFO', os.path.join(BASE_PATH, 'cust_info.csv')),
+    'crm_sales_details': os.getenv('PATH_CRM_SALES_DETAILS', os.path.join(BASE_PATH, 'sales_details.csv')),
+    'crm_prd_info': os.getenv('PATH_CRM_PRD_INFO', os.path.join(BASE_PATH, 'prd_info.csv')),
+    'erp_cust_az12': os.getenv('PATH_ERP_CUST_AZ12', os.path.join(BASE_PATH, 'CUST_AZ12.csv')),
+    'erp_loc_a101': os.getenv('PATH_ERP_LOC_A101', os.path.join(BASE_PATH, 'LOC_A101.csv')),
+    'erp_px_cat_g1v2': os.getenv('PATH_ERP_PX_CAT_G1V2', os.path.join(BASE_PATH, 'PX_CAT_G1V2.csv'))
 }
 
 # Simulation settings

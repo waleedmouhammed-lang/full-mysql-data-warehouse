@@ -1,267 +1,381 @@
-import mysql.connector
+import csv
+import hashlib
 import logging
-import time
-import sys
 import os
-from datetime import datetime
+import sys
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pyodbc
 from dotenv import load_dotenv
 
-# --- Configuration & Logging Setup ---
+from sqlserver_connection import get_connection
+
+
+METADATA_COLUMNS = ["batch_id", "source_file", "source_row_number", "loaded_at", "row_hash"]
+
+TABLES_TO_LOAD = [
+    {
+        "name": "crm_cust_info",
+        "env_path": "PATH_CRM_CUST_INFO",
+        "columns": [
+            "cst_id", "cst_key", "cst_firstname", "cst_lastname",
+            "cst_marital_status", "cst_gndr", "cst_create_date",
+        ],
+        "keys": ["cst_id"],
+    },
+    {
+        "name": "crm_prd_info",
+        "env_path": "PATH_CRM_PRD_INFO",
+        "columns": [
+            "prd_id", "prd_key", "prd_nm", "prd_cost", "prd_line",
+            "prd_start_dt", "prd_end_dt",
+        ],
+        "keys": ["prd_id"],
+    },
+    {
+        "name": "crm_sales_details",
+        "env_path": "PATH_CRM_SALES_DETAILS",
+        "columns": [
+            "sls_ord_num", "sls_prd_key", "sls_cust_id", "sls_order_dt",
+            "sls_ship_dt", "sls_due_dt", "sls_sales", "sls_quantity", "sls_price",
+        ],
+        "keys": ["sls_ord_num", "sls_prd_key"],
+    },
+    {
+        "name": "erp_cust_az12",
+        "env_path": "PATH_ERP_CUST_AZ12",
+        "columns": ["CID", "BDATE", "GEN"],
+        "keys": ["CID"],
+    },
+    {
+        "name": "erp_loc_a101",
+        "env_path": "PATH_ERP_LOC_A101",
+        "columns": ["CID", "CNTRY"],
+        "keys": ["CID"],
+    },
+    {
+        "name": "erp_px_cat_g1v2",
+        "env_path": "PATH_ERP_PX_CAT_G1V2",
+        "columns": ["ID", "CAT", "SUBCAT", "MAINTENANCE"],
+        "keys": ["ID"],
+    },
+]
+
 
 def setup_logging():
-    """Configures logging to print to console and save to a file."""
-    logger = logging.getLogger('bronze_etl')
+    logger = logging.getLogger("bronze_etl")
     logger.setLevel(logging.INFO)
-    
     logger.propagate = False
 
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    # Console Handler
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
     console_handler = logging.StreamHandler()
-    console_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    console_handler.setFormatter(console_format)
+    console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-    
-    # File Handler
-    file_handler = logging.FileHandler('bronze_load.log')
-    file_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(file_format)
+
+    file_handler = logging.FileHandler("bronze_load.log")
+    file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-    
+
     return logger
 
-def read_config(env_file='.env'):
-    """Reads database and file path configuration from .env file."""
-    logger = logging.getLogger('bronze_etl')
-    
-    if not load_dotenv(env_file):
-        logger.error(f"CRITICAL: Environment file '{env_file}' not found.")
+
+def require_config(logger):
+    load_dotenv()
+
+    paths = {}
+    missing = []
+    for table in TABLES_TO_LOAD:
+        value = os.getenv(table["env_path"])
+        if value:
+            paths[table["name"]] = value
+        else:
+            missing.append(table["env_path"])
+
+    if missing:
+        logger.error("Missing required source path variables: %s", ", ".join(missing))
         sys.exit(1)
-        
-    logger.info(f"Reading configuration from {env_file}...")
 
-    db_config = {
-        'host': os.getenv('DB_HOST'),
-        'user': os.getenv('DB_USER'),
-        'password': os.getenv('DB_PASSWORD'),
-        'database': os.getenv('DB_DATABASE')
-    }
+    return paths
 
-    paths_config = {
-        'crm_cust_info': os.getenv('PATH_CRM_CUST_INFO'),
-        'crm_prd_info': os.getenv('PATH_CRM_PRD_INFO'),
-        'crm_sales_details': os.getenv('PATH_CRM_SALES_DETAILS'),
-        'erp_cust_az12': os.getenv('PATH_ERP_CUST_AZ12'),
-        'erp_loc_a101': os.getenv('PATH_ERP_LOC_A101'),
-        'erp_px_cat_g1v2': os.getenv('PATH_ERP_PX_CAT_G1V2')
-    }
 
-    if not all(db_config.values()):
-        logger.error("CRITICAL: One or more DB_... variables are missing from .env file.")
-        sys.exit(1)
-        
-    if not all(paths_config.values()):
-        logger.error("CRITICAL: One or more PATH_... variables are missing from .env file.")
-        sys.exit(1)
-        
-    return db_config, paths_config
+def quote_name(name):
+    return f"[{name}]"
 
-# --- Database Logging Functions ---
 
-def log_etl_start(connection, process_name):
-    """Inserts a new 'In Progress' record into etl_log and returns the log_id."""
-    start_time = datetime.now()
-    query = """
-        INSERT INTO etl_log (process_name, start_time, status, log_message)
-        VALUES (%s, %s, 'In Progress', 'Bronze load started.')
+def hash_row(row, columns):
+    payload = "\x1f".join((row.get(column) or "").strip() for column in columns)
+    return hashlib.sha256(payload.encode("utf-8")).digest()
+
+
+def read_csv_rows(file_path, table_config, batch_id):
+    source_file = str(Path(file_path).resolve())
+    loaded_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    columns = table_config["columns"]
+    rows = []
+
+    with open(file_path, "r", newline="", encoding="utf-8-sig") as csv_file:
+        reader = csv.DictReader(csv_file)
+        for row_number, row in enumerate(reader, start=1):
+            values = [row.get(column, "") for column in columns]
+            values.extend([
+                str(batch_id),
+                source_file,
+                row_number,
+                loaded_at,
+                pyodbc.Binary(hash_row(row, columns)),
+            ])
+            rows.append(values)
+
+    return rows
+
+
+def start_job(cursor, pipeline_name):
+    job_id = str(uuid.uuid4())
+    cursor.execute(
+        """
+        INSERT INTO ops.job_runs (job_run_id, pipeline_name, status, started_at, message)
+        VALUES (?, ?, 'Running', SYSUTCDATETIME(), ?)
+        """,
+        job_id,
+        pipeline_name,
+        f"{pipeline_name} started.",
+    )
+    return job_id
+
+
+def finish_job(cursor, job_id, status, message):
+    cursor.execute(
+        """
+        UPDATE ops.job_runs
+        SET
+            status = ?,
+            ended_at = SYSUTCDATETIME(),
+            duration_sec = DATEDIFF_BIG(MILLISECOND, started_at, SYSUTCDATETIME()) / 1000.0,
+            message = ?
+        WHERE job_run_id = ?
+        """,
+        status,
+        message,
+        job_id,
+    )
+
+
+def start_task(cursor, job_id, task_name):
+    cursor.execute(
+        """
+        INSERT INTO ops.task_runs (job_run_id, task_name, status, started_at)
+        OUTPUT inserted.task_run_id
+        VALUES (?, ?, 'Running', SYSUTCDATETIME())
+        """,
+        job_id,
+        task_name,
+    )
+    return cursor.fetchone()[0]
+
+
+def finish_task(cursor, task_run_id, status, rows_read, rows_inserted, rows_updated, rows_rejected, message):
+    cursor.execute(
+        """
+        UPDATE ops.task_runs
+        SET
+            status = ?,
+            ended_at = SYSUTCDATETIME(),
+            duration_sec = DATEDIFF_BIG(MILLISECOND, started_at, SYSUTCDATETIME()) / 1000.0,
+            rows_read = ?,
+            rows_inserted = ?,
+            rows_updated = ?,
+            rows_rejected = ?,
+            message = ?
+        WHERE task_run_id = ?
+        """,
+        status,
+        rows_read,
+        rows_inserted,
+        rows_updated,
+        rows_rejected,
+        message,
+        task_run_id,
+    )
+
+
+def audit_source_file(cursor, job_id, table_name, file_path, row_count):
+    path = Path(file_path)
+    stat = path.stat()
+    modified_at = datetime.fromtimestamp(stat.st_mtime, timezone.utc).replace(tzinfo=None)
+    cursor.execute(
+        """
+        INSERT INTO ops.source_file_audit (
+            job_run_id, source_name, source_file, file_size_bytes, row_count, file_modified_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        job_id,
+        table_name,
+        str(path.resolve()),
+        stat.st_size,
+        row_count,
+        modified_at,
+    )
+
+
+def load_stage(cursor, table_config, rows):
+    table_name = table_config["name"]
+    columns = table_config["columns"] + METADATA_COLUMNS
+    placeholders = ", ".join(["?"] * len(columns))
+    column_list = ", ".join(quote_name(column) for column in columns)
+
+    cursor.execute(f"TRUNCATE TABLE staging.{quote_name(table_name)}")
+    cursor.fast_executemany = True
+    cursor.executemany(
+        f"INSERT INTO staging.{quote_name(table_name)} ({column_list}) VALUES ({placeholders})",
+        rows,
+    )
+
+
+def merge_stage_to_bronze(cursor, table_config):
+    table_name = table_config["name"]
+    business_columns = table_config["columns"]
+    all_columns = business_columns + METADATA_COLUMNS
+    key_columns = table_config["keys"]
+
+    partition_clause = ", ".join(quote_name(column) for column in key_columns)
+    key_not_null = " AND ".join(f"{quote_name(column)} IS NOT NULL" for column in key_columns)
+    join_clause = " AND ".join(f"tgt.{quote_name(column)} = src.{quote_name(column)}" for column in key_columns)
+    update_clause = ", ".join(
+        f"tgt.{quote_name(column)} = src.{quote_name(column)}"
+        for column in all_columns
+        if column not in key_columns
+    )
+    insert_columns = ", ".join(quote_name(column) for column in all_columns)
+    select_columns = ", ".join(f"src.{quote_name(column)}" for column in all_columns)
+
+    source_cte = f"""
+        WITH src AS (
+            SELECT
+                {", ".join(quote_name(column) for column in all_columns)},
+                ROW_NUMBER() OVER (
+                    PARTITION BY {partition_clause}
+                    ORDER BY source_row_number DESC
+                ) AS rn
+            FROM staging.{quote_name(table_name)}
+            WHERE {key_not_null}
+        )
     """
-    with connection.cursor() as cursor:
-        cursor.execute(query, (process_name, start_time))
-        connection.commit()
-        return cursor.lastrowid, start_time
 
-def log_etl_end(connection, log_id, start_time, status, message):
-    """Updates the etl_log record with the final status, end time, and duration."""
-    end_time = datetime.now()
-    duration = (end_time - start_time).total_seconds()
-    query = """
-        UPDATE etl_log
-        SET end_time = %s, duration_sec = %s, status = %s, log_message = %s
-        WHERE log_id = %s
+    update_sql = f"""
+        {source_cte}
+        UPDATE tgt
+        SET {update_clause}
+        FROM bronze.{quote_name(table_name)} AS tgt
+        INNER JOIN src
+            ON {join_clause}
+        WHERE src.rn = 1;
     """
-    with connection.cursor() as cursor:
-        cursor.execute(query, (end_time, duration, status, message, log_id))
-        connection.commit()
+    cursor.execute(update_sql)
+    rows_updated = cursor.rowcount if cursor.rowcount != -1 else 0
 
-# --- Main ETL Logic ---
+    insert_sql = f"""
+        {source_cte}
+        INSERT INTO bronze.{quote_name(table_name)} ({insert_columns})
+        SELECT {select_columns}
+        FROM src
+        WHERE src.rn = 1
+          AND NOT EXISTS (
+              SELECT 1
+              FROM bronze.{quote_name(table_name)} AS tgt
+              WHERE {join_clause}
+          );
+    """
+    cursor.execute(insert_sql)
+    rows_inserted = cursor.rowcount if cursor.rowcount != -1 else 0
+
+    rejected_sql = f"""
+        SELECT COUNT(*)
+        FROM staging.{quote_name(table_name)}
+        WHERE NOT ({key_not_null})
+    """
+    cursor.execute(rejected_sql)
+    rows_rejected = cursor.fetchone()[0]
+
+    return rows_inserted, rows_updated, rows_rejected
+
 
 def main():
-    """
-    Main ETL function for INCREMENTAL load to Bronze tables.
-    Uses a staging table workflow for deduplication.
-    """
     logger = setup_logging()
-    db_config, paths = read_config()
-    
-    # UPDATED: We are changing this from a simple list of tuples to a
-    # list of dictionaries. This provides the metadata (column names)
-    # needed to dynamically build the UPSERT query.
-    tables_to_load = [
-        {
-            'name': 'crm_cust_info',
-            'path': paths.get('crm_cust_info'),
-            'columns': [
-                'cst_id', 'cst_key', 'cst_firstname', 'cst_lastname', 
-                'cst_marital_status', 'cst_gndr', 'cst_create_date'
-            ]
-        },
-        {
-            'name': 'crm_prd_info',
-            'path': paths.get('crm_prd_info'),
-            'columns': [
-                'prd_id', 'prd_key', 'prd_nm', 'prd_cost', 'prd_line', 
-                'prd_start_dt', 'prd_end_dt'
-            ]
-        },
-        {
-            'name': 'crm_sales_details',
-            'path': paths.get('crm_sales_details'),
-            'columns': [
-                'sls_ord_num', 'sls_prd_key', 'sls_cust_id', 'sls_order_dt',
-                'sls_ship_dt', 'sls_due_dt', 'sls_sales', 'sls_quantity', 'sls_price'
-            ]
-        },
-        {
-            'name': 'erp_cust_az12',
-            'path': paths.get('erp_cust_az12'),
-            'columns': ['CID', 'BDATE', 'GEN']
-        },
-        {
-            'name': 'erp_loc_a101',
-            'path': paths.get('erp_loc_a101'),
-            'columns': ['CID', 'CNTRY']
-        },
-        {
-            'name': 'erp_px_cat_g1v2',
-            'path': paths.get('erp_px_cat_g1v2'),
-            'columns': ['ID', 'CAT', 'SUBCAT', 'MAINTENANCE']
-        }
-    ]
+    paths = require_config(logger)
+    batch_id = uuid.uuid4()
+    job_id = None
+
+    logger.info("Starting SQL Server bronze load. Batch ID: %s", batch_id)
+    start_time = time.time()
 
     connection = None
-    log_id = None
-    process_start_time = datetime.now()
-    
     try:
-        # --- Connect to Database ---
-        logger.info(f"Connecting to database '{db_config['database']}' on {db_config['host']}...")
-        connection = mysql.connector.connect(
-            **db_config,
-            allow_local_infile=True
-        )
-        
-        if not connection.is_connected():
-            logger.error("CRITICAL: Database connection failed.")
-            sys.exit(1)
-            
-        logger.info("Database connection successful.")
-        log_id, process_start_time = log_etl_start(connection, 'bronze_incremental_load')
+        connection = get_connection()
+        connection.autocommit = False
+        cursor = connection.cursor()
+        job_id = start_job(cursor, "bronze_load")
+        connection.commit()
 
-        # --- Begin Main Load Process ---
-        logger.info(f"Starting Bronze incremental load process (Log ID: {log_id})...")
-        total_start_time = time.time()
-        # This metric is no longer as simple as "new rows"
-        total_rows_affected = 0
+        for table_config in TABLES_TO_LOAD:
+            table_name = table_config["name"]
+            task_id = start_task(cursor, job_id, f"bronze.{table_name}")
+            connection.commit()
 
-        with connection.cursor() as cursor:
-            # UPDATED: The loop now iterates over the list of dictionaries
-            for table_config in tables_to_load:
-                table_start_time = time.time()
-                
-                table_name = table_config['name']
-                file_path = table_config['path']
-                columns = table_config['columns']
-                
-                # Define the corresponding staging table
-                stg_table_name = f"stg_{table_name}"
-                
-                logger.info(f"Processing table: {table_name}...")
+            try:
+                file_path = paths[table_name]
+                rows = read_csv_rows(file_path, table_config, batch_id)
+                logger.info("Read %s rows from %s.", len(rows), file_path)
 
-                # 1. TRUNCATE the STAGING table
-                logger.debug(f"Truncating staging table: {stg_table_name}...")
-                cursor.execute(f"TRUNCATE TABLE {stg_table_name}")
-                
-                # 2. LOAD DATA into the STAGING table
-                logger.debug(f"Loading data from {file_path} into {stg_table_name}...")
-                
-                safe_file_path = os.path.normpath(file_path).replace('\\', '\\\\')
-                load_query = f"""
-                    LOAD DATA LOCAL INFILE '{safe_file_path}'
-                    INTO TABLE {stg_table_name}
-                    FIELDS TERMINATED BY ','
-                    OPTIONALLY ENCLOSED BY '"'
-                    LINES TERMINATED BY '\\r\\n'
-                    IGNORE 1 LINES
-                """
-                cursor.execute(load_query)
-                rows_loaded_to_stage = cursor.rowcount
-                logger.info(f"Loaded {rows_loaded_to_stage} rows from file into {stg_table_name}.")
-
-                # 3. MERGE data from Staging to Final table (UPSERT)
-                # This logic is CHANGED from INSERT IGNORE to UPSERT
-                logger.debug(f"Upserting data from {stg_table_name} into {table_name}...")
-                
-                # Dynamically build the "ON DUPLICATE KEY UPDATE" clause
-                # e.g., "cst_id = VALUES(cst_id), cst_key = VALUES(cst_key), ..."
-                update_clause = ",\n".join([f"{col} = VALUES({col})" for col in columns])
-                
-                merge_query = f"""
-                    INSERT INTO {table_name}
-                    SELECT * FROM {stg_table_name}
-                    ON DUPLICATE KEY UPDATE
-                    {update_clause}
-                """
-                
-                cursor.execute(merge_query)
-                # In MySQL, rowcount is 1 for a new insert, 2 for an update.
-                rows_affected = cursor.rowcount
-                total_rows_affected += rows_affected
-                
-                # Commit after each *full* table workflow (Stage + Merge)
+                load_stage(cursor, table_config, rows)
+                rows_inserted, rows_updated, rows_rejected = merge_stage_to_bronze(cursor, table_config)
+                audit_source_file(cursor, job_id, table_name, file_path, len(rows))
+                finish_task(
+                    cursor,
+                    task_id,
+                    "Success",
+                    len(rows),
+                    rows_inserted,
+                    rows_updated,
+                    rows_rejected,
+                    f"{table_name} loaded successfully.",
+                )
                 connection.commit()
-                
-                table_duration = time.time() - table_start_time
-                
-                # UPDATED: Changed the log message to be more accurate
-                logger.info(f"Successfully processed {table_name} in {table_duration:.2f}s. Rows affected (1=new, 2=update): {rows_affected}")
 
-        # --- Log Success ---
-        total_duration = time.time() - total_start_time
-        # UPDATED: Changed the success message
-        success_message = f"All {len(tables_to_load)} tables processed successfully (upsert) in {total_duration:.2f} seconds. Total rows affected: {total_rows_affected}."
-        logger.info(success_message)
-        log_etl_end(connection, log_id, process_start_time, 'Success', success_message)
+                logger.info(
+                    "%s complete. Inserted=%s Updated=%s Rejected=%s",
+                    table_name,
+                    rows_inserted,
+                    rows_updated,
+                    rows_rejected,
+                )
+            except Exception as exc:
+                connection.rollback()
+                cursor = connection.cursor()
+                finish_task(cursor, task_id, "Failed", None, None, None, None, str(exc))
+                finish_job(cursor, job_id, "Failed", f"Bronze load failed at {table_name}: {exc}")
+                connection.commit()
+                raise
 
-    except mysql.connector.Error as err:
-        error_message = f"MySQL Error: {err.errno} - {err.msg}"
-        logger.error(f"ETL FAILED. {error_message}")
-        if log_id and connection and connection.is_connected():
-            log_etl_end(connection, log_id, process_start_time, 'Error', error_message)
+        duration = time.time() - start_time
+        finish_job(cursor, job_id, "Success", f"Bronze load completed in {duration:.2f} seconds.")
+        connection.commit()
+        logger.info("Bronze load completed in %.2f seconds.", duration)
+
+    except Exception as exc:
+        logger.error("Bronze load failed: %s", exc)
         sys.exit(1)
-
-    except Exception as e:
-        error_message = f"Non-DB Error: {str(e)}"
-        logger.error(f"ETL FAILED. {error_message}")
-        if log_id and connection and connection.is_connected():
-            log_etl_end(connection, log_id, process_start_time, 'Error', error_message)
-        sys.exit(1)
-
     finally:
-        if connection and connection.is_connected():
+        if connection:
             connection.close()
-            logger.info("Database connection closed.")
+
 
 if __name__ == "__main__":
     main()

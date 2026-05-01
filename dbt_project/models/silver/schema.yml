@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: crm_cust_info
+    columns:
+      - name: cst_id
+        tests: [not_null, unique]
+      - name: cst_key
+        tests: [not_null]
+
+  - name: crm_prd_info
+    columns:
+      - name: prd_id
+        tests: [not_null, unique]
+      - name: prd_key
+        tests: [not_null]
+
+  - name: crm_sales_details
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [sls_ord_num, sls_prd_key]
+    columns:
+      - name: sls_ord_num
+        tests: [not_null]
+      - name: sls_prd_key
+        tests: [not_null]
+      - name: sls_cust_id
+        tests: [not_null]
+
+  - name: erp_cust_az12
+    columns:
+      - name: CID
+        tests: [not_null, unique]
+
+  - name: erp_loc_a101
+    columns:
+      - name: CID
+        tests: [not_null, unique]
+
+  - name: erp_px_cat_g1v2
+    columns:
+      - name: ID
+        tests: [not_null, unique]
