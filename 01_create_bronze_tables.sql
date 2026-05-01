@@ -21,7 +21,8 @@ Strategy: We use `CREATE TABLE IF NOT EXISTS` so this script is safe
           All columns remain VARCHAR(255) for a resilient raw-data-capture.
 ================================================================================
 */
-
+-- Primary key check -- Dina
+-- Ensuring that fully duplicated row is eliminated -- Fatema
 -- Table: CRM Customer Info
 CREATE TABLE IF NOT EXISTS crm_cust_info(
     cst_id VARCHAR(255),

@@ -1,3 +1,4 @@
+-- Active: 1777628664740@@127.0.0.1@3306@dw_silver
 /*
 ================================================================================
 SCRIPT: 00_create_warehouse_schema.sql
@@ -53,9 +54,9 @@ Purpose: (Optional but Recommended) Create a dedicated, low-privilege
 ================================================================================
 */
 
-/*
+
 -- Example: Create an ETL user
-CREATE USER 'etl_user'@'localhost' IDENTIFIED BY 'a-very-strong-password';
+CREATE USER 'etl_user'@'localhost' IDENTIFIED BY 'Waleed@2181987';
 
 -- Grant ONLY the necessary permissions for the Bronze load
 -- The ETL user needs to create, drop, and insert into the Bronze tables.
@@ -69,6 +70,6 @@ ON dw_silver.* TO 'etl_user'@'localhost';
 
 -- Flush privileges to apply the changes
 FLUSH PRIVILEGES;
-*/
+
 
 -- End of script --

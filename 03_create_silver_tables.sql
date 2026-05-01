@@ -28,19 +28,14 @@ CREATE TABLE crm_cust_info (
     cst_key VARCHAR(20) COMMENT 'Cleansed cst_key',
     cst_firstname VARCHAR(100) COMMENT 'Cleansed cst_firstname',
     cst_lastname VARCHAR(100) COMMENT 'Cleansed cst_lastname',
-    
     -- UPDATED: Increased length from VARCHAR(2) to VARCHAR(10)
     cst_marital_status VARCHAR(10) COMMENT 'Cleansed cst_marital_status (e.g., Single, Married)',
-    
     -- UPDATED: Increased length from VARCHAR(2) to VARCHAR(10)
     cst_gndr VARCHAR(10) COMMENT 'Cleansed cst_gndr (e.g., Male, Female)',
-    
     cst_create_date DATE COMMENT 'Cast from cst_create_date string',
-    
     -- Metadata / Auditing Columns
     meta_created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was first created',
     meta_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was last updated',
-    
     -- Indexes
     INDEX idx_cst_key (cst_key)
 );
@@ -62,11 +57,9 @@ CREATE TABLE crm_prd_info (
     prd_line VARCHAR(15) COMMENT 'Cleansed prd_line',
     prd_start_dt DATE COMMENT 'Cast from prd_start_dt string',
     prd_end_dt DATE NULL COMMENT 'Cast from prd_end_dt, allows NULLs for active products',
-    
     -- Metadata / Auditing Columns
     meta_created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was first created',
     meta_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was last updated',
-    
     -- Indexes
     UNIQUE KEY uq_prd_key (prd_id)
 );
@@ -89,14 +82,11 @@ CREATE TABLE crm_sales_details (
     sls_sales DECIMAL(19, 4) COMMENT 'Cast from sls_sales',
     sls_quantity INT COMMENT 'Cast from sls_quantity',
     sls_price DECIMAL(19, 4) COMMENT 'Cast from sls_price',
-    
     -- Metadata / Auditing Columns
     meta_created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was first created',
     meta_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was last updated',
-    
     -- Primary key for sales line item
     PRIMARY KEY (sls_ord_num, sls_prd_key),
-    
     -- Indexes for future joins
     INDEX idx_cust_id (sls_cust_id),
     INDEX idx_prd_key (sls_prd_key),
@@ -115,7 +105,6 @@ CREATE TABLE erp_cust_az12 (
     CID VARCHAR(20) PRIMARY KEY COMMENT 'Cleansed business key (CID)',
     BDATE DATE COMMENT 'Cast from BDATE string',
     GEN VARCHAR(10) COMMENT 'Cleansed GEN (e.g., Male, Female)',
-    
     -- Metadata / Auditing Columns
     meta_created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was first created',
     meta_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was last updated'
@@ -132,7 +121,6 @@ CREATE TABLE erp_loc_a101 (
     -- Cleansed & Casted Columns from Bronze
     CID VARCHAR(20) PRIMARY KEY COMMENT 'Cleansed business key (CID)',
     CNTRY VARCHAR(50) COMMENT 'Cleansed CNTRY',
-    
     -- Metadata / Auditing Columns
     meta_created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was first created',
     meta_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was last updated'
@@ -151,7 +139,6 @@ CREATE TABLE erp_px_cat_g1v2 (
     CAT VARCHAR(50) COMMENT 'Cleansed CAT',
     SUBCAT VARCHAR(50) COMMENT 'Cleansed SUBCAT',
     MAINTENANCE VARCHAR(10) COMMENT 'Cast from Yes/No string',
-    
     -- Metadata / Auditing Columns
     meta_created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was first created',
     meta_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp when the row was last updated'
