@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: bronze
-    database: "{{ env_var('SQLSERVER_DATABASE', 'DataWarehouse') }}"
+    database: "{{ env_var('SQLSERVER_DATABASE', 'CustomerSales') }}"
     schema: bronze
     tables:
       - name: crm_cust_info

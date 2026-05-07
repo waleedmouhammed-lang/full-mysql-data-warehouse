@@ -5,7 +5,7 @@ PURPOSE: Creates SQL Server staging tables used by the Python bronze loader.
 ================================================================================
 */
 
-USE DataWarehouse;
+USE CustomerSales;
 GO
 
 IF OBJECT_ID(N'staging.crm_cust_info', N'U') IS NULL

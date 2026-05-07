@@ -6,7 +6,7 @@ STRATEGY: Idempotent UPDATE then INSERT, except product history full refresh.
 ================================================================================
 */
 
-USE DataWarehouse;
+USE CustomerSales;
 GO
 
 SET XACT_ABORT ON;

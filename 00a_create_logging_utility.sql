@@ -5,7 +5,7 @@ PURPOSE: Creates SQL Server operational metadata tables in ops schema.
 ================================================================================
 */
 
-USE DataWarehouse;
+USE CustomerSales;
 GO
 
 IF OBJECT_ID(N'ops.job_runs', N'U') IS NULL
@@ -15,17 +15,17 @@ BEGIN
             CONSTRAINT pk_ops_job_runs PRIMARY KEY
             CONSTRAINT df_ops_job_runs_id DEFAULT NEWID(),
         pipeline_name NVARCHAR(128) NOT NULL,
-        status VARCHAR(20) NOT NULL
-            CONSTRAINT ck_ops_job_runs_status CHECK (status IN ('Running', 'Success', 'Failed')),
+        pl_status VARCHAR(20) NOT NULL
+            CONSTRAINT ck_ops_job_runs_status CHECK (pl_status IN ('Running', 'Success', 'Failed')),
         started_at DATETIME2(6) NOT NULL
             CONSTRAINT df_ops_job_runs_started_at DEFAULT SYSUTCDATETIME(),
         ended_at DATETIME2(6) NULL,
         duration_sec DECIMAL(18, 4) NULL,
-        message NVARCHAR(MAX) NULL
+        status_message NVARCHAR(MAX) NULL
     );
 
     CREATE INDEX ix_ops_job_runs_started_at ON ops.job_runs(started_at);
-    CREATE INDEX ix_ops_job_runs_status ON ops.job_runs(status);
+    CREATE INDEX ix_ops_job_runs_status ON ops.job_runs(pl_status);
 END;
 GO
 
@@ -36,8 +36,8 @@ BEGIN
             CONSTRAINT pk_ops_task_runs PRIMARY KEY,
         job_run_id UNIQUEIDENTIFIER NOT NULL,
         task_name NVARCHAR(128) NOT NULL,
-        status VARCHAR(20) NOT NULL
-            CONSTRAINT ck_ops_task_runs_status CHECK (status IN ('Running', 'Success', 'Failed')),
+        task_status VARCHAR(20) NOT NULL
+            CONSTRAINT ck_ops_task_runs_status CHECK (task_status IN ('Running', 'Success', 'Failed')),
         started_at DATETIME2(6) NOT NULL
             CONSTRAINT df_ops_task_runs_started_at DEFAULT SYSUTCDATETIME(),
         ended_at DATETIME2(6) NULL,
@@ -46,7 +46,7 @@ BEGIN
         rows_inserted INT NULL,
         rows_updated INT NULL,
         rows_rejected INT NULL,
-        message NVARCHAR(MAX) NULL,
+        status_message NVARCHAR(MAX) NULL,
         CONSTRAINT fk_ops_task_runs_job_runs
             FOREIGN KEY (job_run_id) REFERENCES ops.job_runs(job_run_id)
     );
@@ -82,8 +82,8 @@ BEGIN
         job_run_id UNIQUEIDENTIFIER NULL,
         model_name NVARCHAR(256) NOT NULL,
         test_name NVARCHAR(256) NOT NULL,
-        status VARCHAR(20) NOT NULL
-            CONSTRAINT ck_ops_data_quality_results_status CHECK (status IN ('Pass', 'Warn', 'Fail')),
+        test_status VARCHAR(20) NOT NULL
+            CONSTRAINT ck_ops_data_quality_results_status CHECK (test_status IN ('Pass', 'Warn', 'Fail')),
         failed_row_count INT NULL,
         checked_at DATETIME2(6) NOT NULL
             CONSTRAINT df_ops_data_quality_results_checked_at DEFAULT SYSUTCDATETIME(),
@@ -116,8 +116,8 @@ BEGIN
         severity VARCHAR(20) NOT NULL
             CONSTRAINT ck_ops_alerts_severity CHECK (severity IN ('Info', 'Warning', 'Critical')),
         channel VARCHAR(50) NULL,
-        subject NVARCHAR(256) NOT NULL,
-        message NVARCHAR(MAX) NULL,
+        alert_subject NVARCHAR(256) NOT NULL,
+        alert_message NVARCHAR(MAX) NULL,
         created_at DATETIME2(6) NOT NULL
             CONSTRAINT df_ops_alerts_created_at DEFAULT SYSUTCDATETIME(),
         sent_at DATETIME2(6) NULL

@@ -5,7 +5,7 @@ PURPOSE: Creates SQL Server gold star schema tables.
 ================================================================================
 */
 
-USE DataWarehouse;
+USE CustomerSales;
 GO
 
 DROP TABLE IF EXISTS gold.fact_sales;

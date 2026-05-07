@@ -6,7 +6,7 @@ sqlserver_warehouse:
       driver: "{{ env_var('SQLSERVER_DRIVER', 'ODBC Driver 18 for SQL Server') }}"
       server: "{{ env_var('SQLSERVER_HOST', 'localhost') }}"
       port: "{{ env_var('SQLSERVER_PORT', '1433') | int }}"
-      database: "{{ env_var('SQLSERVER_DATABASE', 'DataWarehouse') }}"
+      database: "{{ env_var('SQLSERVER_DATABASE', 'CustomerSales') }}"
       schema: dbo
       user: "{{ env_var('SQLSERVER_USER', 'sa') }}"
       password: "{{ env_var('SQLSERVER_PASSWORD') }}"

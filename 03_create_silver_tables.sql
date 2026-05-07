@@ -5,7 +5,7 @@ PURPOSE: Creates typed SQL Server silver tables.
 ================================================================================
 */
 
-USE DataWarehouse;
+USE CustomerSales;
 GO
 
 DROP TABLE IF EXISTS silver.crm_sales_details;

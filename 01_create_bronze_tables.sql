@@ -12,7 +12,7 @@ Bronze tables keep source values as VARCHAR, plus load metadata:
 ================================================================================
 */
 
-USE DataWarehouse;
+USE CustomerSales;
 GO
 
 IF OBJECT_ID(N'bronze.crm_cust_info', N'U') IS NULL

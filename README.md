@@ -5,7 +5,7 @@ This project is an end-to-end, portfolio-ready data warehouse pipeline built aro
 ## Architecture
 
 - **Runtime:** SQL Server in Docker.
-- **Warehouse:** one database, `DataWarehouse`.
+- **Warehouse:** one database, `CustomerSales`.
 - **Schemas:** `staging`, `bronze`, `silver`, `gold`, and `ops`.
 - **Ingestion:** Python reads CSV files and batch-loads SQL Server staging tables with `pyodbc`.
 - **Transformations:** dbt models build silver and gold layers.
@@ -14,7 +14,7 @@ This project is an end-to-end, portfolio-ready data warehouse pipeline built aro
 
 ## Key Files
 
-- `00_create_warehouse_schema.sql`: creates `DataWarehouse`, schemas, and the ETL database role.
+- `00_create_warehouse_schema.sql`: creates `CustomerSales`, schemas, and the ETL database role.
 - `00a_create_logging_utility.sql`: creates `ops` operational metadata tables.
 - `01_create_bronze_tables.sql`: creates raw bronze tables with batch/source metadata.
 - `02_create_staging_tables.sql`: creates transient staging tables for CSV batch loading.

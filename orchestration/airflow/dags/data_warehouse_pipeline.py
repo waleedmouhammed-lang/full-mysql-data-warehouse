@@ -21,7 +21,7 @@ def record_failure_alert(context):
     driver = os.getenv("SQLSERVER_DRIVER", "ODBC Driver 18 for SQL Server")
     host = os.getenv("SQLSERVER_HOST", "sqlserver")
     port = os.getenv("SQLSERVER_PORT", "1433")
-    database = os.getenv("SQLSERVER_DATABASE", "DataWarehouse")
+    database = os.getenv("SQLSERVER_DATABASE", "CustomerSales")
     user = os.getenv("SQLSERVER_USER", "sa")
     password = os.getenv("SQLSERVER_PASSWORD")
 

@@ -53,7 +53,7 @@ services:
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
       SQLSERVER_HOST: sqlserver
       SQLSERVER_PORT: 1433
-      SQLSERVER_DATABASE: DataWarehouse
+      SQLSERVER_DATABASE: CustomerSales
       SQLSERVER_USER: sa
       SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD:-YourStrong!Passw0rd}
       SQLSERVER_DRIVER: ODBC Driver 18 for SQL Server
@@ -81,7 +81,7 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       SQLSERVER_HOST: sqlserver
       SQLSERVER_PORT: 1433
-      SQLSERVER_DATABASE: DataWarehouse
+      SQLSERVER_DATABASE: CustomerSales
       SQLSERVER_USER: sa
       SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD:-YourStrong!Passw0rd}
       SQLSERVER_DRIVER: ODBC Driver 18 for SQL Server

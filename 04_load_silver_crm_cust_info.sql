@@ -6,7 +6,7 @@ NOTE: The full silver load is in 04_load_silver_layer.sql.
 ================================================================================
 */
 
-USE DataWarehouse;
+USE CustomerSales;
 GO
 
 SET XACT_ABORT ON;

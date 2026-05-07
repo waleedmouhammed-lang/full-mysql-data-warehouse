@@ -6,7 +6,7 @@ STRATEGY: Ordered full refresh using DELETE to respect foreign keys.
 ================================================================================
 */
 
-USE DataWarehouse;
+USE CustomerSales;
 GO
 
 SET XACT_ABORT ON;

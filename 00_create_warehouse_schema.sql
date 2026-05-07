@@ -1,10 +1,10 @@
 /*
 ================================================================================
 SCRIPT: 00_create_warehouse_schema.sql
-PURPOSE: One-time SQL Server setup for the warehouse database and schemas.
+PURPOSE: One-time SQL Server setup for the CustomerSales database and schemas.
 
 TARGET: SQL Server in Docker
-DATABASE: DataWarehouse
+DATABASE: CustomerSales
 SCHEMAS: bronze, staging, silver, gold, ops
 
 NOTE:
@@ -17,33 +17,43 @@ NOTE:
 USE master;
 GO
 
-IF DB_ID(N'DataWarehouse') IS NULL
+IF DB_ID(N'CustomerSales') IS NULL
 BEGIN
-    CREATE DATABASE DataWarehouse;
+    CREATE DATABASE CustomerSales;
 END;
 GO
 
-USE DataWarehouse;
+USE CustomerSales;
 GO
 
 IF SCHEMA_ID(N'bronze') IS NULL
+BEGIN
     EXEC(N'CREATE SCHEMA bronze');
+END;
 GO
 
 IF SCHEMA_ID(N'staging') IS NULL
+BEGIN
     EXEC(N'CREATE SCHEMA staging');
+END;
 GO
 
 IF SCHEMA_ID(N'silver') IS NULL
+BEGIN
     EXEC(N'CREATE SCHEMA silver');
+END;
 GO
 
 IF SCHEMA_ID(N'gold') IS NULL
+BEGIN
     EXEC(N'CREATE SCHEMA gold');
+END;
 GO
 
 IF SCHEMA_ID(N'ops') IS NULL
+BEGIN
     EXEC(N'CREATE SCHEMA ops');
+END;
 GO
 
 IF NOT EXISTS (
@@ -57,20 +67,10 @@ BEGIN
 END;
 GO
 
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::bronze TO dw_etl_executor;
 GRANT SELECT, INSERT, UPDATE, DELETE, ALTER ON SCHEMA::staging TO dw_etl_executor;
 GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::silver TO dw_etl_executor;
 GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::gold TO dw_etl_executor;
 GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::ops TO dw_etl_executor;
 GO
-
-/*
-Optional login mapping:
-
-IF SUSER_ID(N'etl_user') IS NOT NULL AND USER_ID(N'etl_user') IS NULL
-BEGIN
-    CREATE USER etl_user FOR LOGIN etl_user;
-    ALTER ROLE dw_etl_executor ADD MEMBER etl_user;
-END;
-GO
-*/
