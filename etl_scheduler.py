@@ -16,7 +16,7 @@ logging.basicConfig(
     ],
 )
 
-DATA_GENERATOR_SCRIPT = "data_generator.py"
+# DATA_GENERATOR_SCRIPT = "data_generator.py"
 BRONZE_LOAD_SCRIPT = "run_bronze_load.py"
 SILVER_LOAD_SCRIPT = "run_silver_load.py"
 GOLD_LOAD_SCRIPT = "run_gold_load.py"
@@ -52,7 +52,7 @@ def run_daily_pipeline():
     logging.info("=== STARTING DAILY SQL SERVER ETL PIPELINE ===")
 
     steps = [
-        ("Generate source data", lambda: run_python_script(DATA_GENERATOR_SCRIPT)),
+        # ("Generate source data", lambda: run_python_script(DATA_GENERATOR_SCRIPT)),
         ("Load bronze", lambda: run_python_script(BRONZE_LOAD_SCRIPT)),
         ("Load silver", lambda: run_python_script(SILVER_LOAD_SCRIPT)),
         ("Load gold", lambda: run_python_script(GOLD_LOAD_SCRIPT)),

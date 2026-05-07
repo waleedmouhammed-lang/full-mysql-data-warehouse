@@ -13,6 +13,7 @@ SET XACT_ABORT ON;
 BEGIN TRANSACTION;
 
 -- crm_cust_info
+-- This is a temporary table to hold the cleaned and typed data from bronze.crm_cust_info before merging into silver.crm_cust_info
 DROP TABLE IF EXISTS #src_crm_cust_info;
 
 SELECT
@@ -36,6 +37,9 @@ FROM bronze.crm_cust_info
 WHERE TRY_CONVERT(INT, NULLIF(TRIM(cst_id), '')) IS NOT NULL
   AND NULLIF(TRIM(cst_key), '') IS NOT NULL;
 
+-- This is the update part of the upsert process
+-- If the record already exists in the silver layer then it will be updated with the
+-- new values from the bronze layer, otherwise it will be inserted as a new record
 UPDATE tgt
 SET
     cst_key = src.cst_key,

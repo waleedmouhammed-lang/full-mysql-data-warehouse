@@ -140,7 +140,7 @@ def start_job(cursor, pipeline_name):
     job_id = str(uuid.uuid4())
     cursor.execute(
         """
-        INSERT INTO ops.job_runs (job_run_id, pipeline_name, status, started_at, message)
+        INSERT INTO ops.job_runs (job_run_id, pipeline_name, pl_status, started_at, status_message)
         VALUES (?, ?, 'Running', SYSUTCDATETIME(), ?)
         """,
         job_id,
@@ -150,19 +150,19 @@ def start_job(cursor, pipeline_name):
     return job_id
 
 
-def finish_job(cursor, job_id, status, message):
+def finish_job(cursor, job_id, pl_status, status_message):
     cursor.execute(
         """
         UPDATE ops.job_runs
         SET
-            status = ?,
+            pl_status = ?,
             ended_at = SYSUTCDATETIME(),
             duration_sec = DATEDIFF_BIG(MILLISECOND, started_at, SYSUTCDATETIME()) / 1000.0,
-            message = ?
+            status_message = ?
         WHERE job_run_id = ?
         """,
-        status,
-        message,
+        pl_status,
+        status_message,
         job_id,
     )
 
@@ -170,7 +170,7 @@ def finish_job(cursor, job_id, status, message):
 def start_task(cursor, job_id, task_name):
     cursor.execute(
         """
-        INSERT INTO ops.task_runs (job_run_id, task_name, status, started_at)
+        INSERT INTO ops.task_runs (job_run_id, task_name, task_status, started_at)
         OUTPUT inserted.task_run_id
         VALUES (?, ?, 'Running', SYSUTCDATETIME())
         """,
@@ -180,22 +180,22 @@ def start_task(cursor, job_id, task_name):
     return cursor.fetchone()[0]
 
 
-def finish_task(cursor, task_run_id, status, rows_read, rows_inserted, rows_updated, rows_rejected, message):
+def finish_task(cursor, task_run_id, task_status, rows_read, rows_inserted, rows_updated, rows_rejected, message):
     cursor.execute(
         """
         UPDATE ops.task_runs
         SET
-            status = ?,
+            task_status = ?,
             ended_at = SYSUTCDATETIME(),
             duration_sec = DATEDIFF_BIG(MILLISECOND, started_at, SYSUTCDATETIME()) / 1000.0,
             rows_read = ?,
             rows_inserted = ?,
             rows_updated = ?,
             rows_rejected = ?,
-            message = ?
+            status_message = ?
         WHERE task_run_id = ?
         """,
-        status,
+        task_status,
         rows_read,
         rows_inserted,
         rows_updated,
