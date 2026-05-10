@@ -29,7 +29,7 @@ BEGIN
         batch_id UNIQUEIDENTIFIER NOT NULL,
         source_file NVARCHAR(4000) NOT NULL,
         source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_crm_cust_info_loaded_at DEFAULT SYSUTCDATETIME(),
+        loaded_at DATETIME2(6) NOT NULL,
         row_hash VARBINARY(32) NOT NULL
     );
 
@@ -53,7 +53,7 @@ BEGIN
         batch_id UNIQUEIDENTIFIER NOT NULL,
         source_file NVARCHAR(4000) NOT NULL,
         source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_crm_prd_info_loaded_at DEFAULT SYSUTCDATETIME(),
+        loaded_at DATETIME2(6) NOT NULL,
         row_hash VARBINARY(32) NOT NULL
     );
 
@@ -79,7 +79,7 @@ BEGIN
         batch_id UNIQUEIDENTIFIER NOT NULL,
         source_file NVARCHAR(4000) NOT NULL,
         source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_crm_sales_details_loaded_at DEFAULT SYSUTCDATETIME(),
+        loaded_at DATETIME2(6) NOT NULL,
         row_hash VARBINARY(32) NOT NULL
     );
 
@@ -99,7 +99,7 @@ BEGIN
         batch_id UNIQUEIDENTIFIER NOT NULL,
         source_file NVARCHAR(4000) NOT NULL,
         source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_erp_cust_az12_loaded_at DEFAULT SYSUTCDATETIME(),
+        loaded_at DATETIME2(6) NOT NULL,
         row_hash VARBINARY(32) NOT NULL
     );
 
@@ -118,7 +118,7 @@ BEGIN
         batch_id UNIQUEIDENTIFIER NOT NULL,
         source_file NVARCHAR(4000) NOT NULL,
         source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_erp_loc_a101_loaded_at DEFAULT SYSUTCDATETIME(),
+        loaded_at DATETIME2(6) NOT NULL,
         row_hash VARBINARY(32) NOT NULL
     );
 
@@ -139,7 +139,7 @@ BEGIN
         batch_id UNIQUEIDENTIFIER NOT NULL,
         source_file NVARCHAR(4000) NOT NULL,
         source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL CONSTRAINT df_bronze_erp_px_cat_g1v2_loaded_at DEFAULT SYSUTCDATETIME(),
+        loaded_at DATETIME2(6) NOT NULL,
         row_hash VARBINARY(32) NOT NULL
     );
 

@@ -18,11 +18,11 @@ BEGIN
         cst_marital_status VARCHAR(255) NULL,
         cst_gndr VARCHAR(255) NULL,
         cst_create_date VARCHAR(255) NULL,
-        batch_id UNIQUEIDENTIFIER NOT NULL,
-        source_file NVARCHAR(4000) NOT NULL,
-        source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL,
-        row_hash VARBINARY(32) NOT NULL
+        batch_id UNIQUEIDENTIFIER NULL,
+        source_file NVARCHAR(4000) NULL,
+        source_row_number INT NULL,
+        loaded_at DATETIME2(6) NULL,
+        row_hash VARBINARY(32) NULL
     );
 END;
 GO
@@ -37,11 +37,11 @@ BEGIN
         prd_line VARCHAR(255) NULL,
         prd_start_dt VARCHAR(255) NULL,
         prd_end_dt VARCHAR(255) NULL,
-        batch_id UNIQUEIDENTIFIER NOT NULL,
-        source_file NVARCHAR(4000) NOT NULL,
-        source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL,
-        row_hash VARBINARY(32) NOT NULL
+        batch_id UNIQUEIDENTIFIER NULL,
+        source_file NVARCHAR(4000) NULL,
+        source_row_number INT NULL,
+        loaded_at DATETIME2(6) NULL,
+        row_hash VARBINARY(32) NULL
     );
 END;
 GO
@@ -58,11 +58,11 @@ BEGIN
         sls_sales VARCHAR(255) NULL,
         sls_quantity VARCHAR(255) NULL,
         sls_price VARCHAR(255) NULL,
-        batch_id UNIQUEIDENTIFIER NOT NULL,
-        source_file NVARCHAR(4000) NOT NULL,
-        source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL,
-        row_hash VARBINARY(32) NOT NULL
+        batch_id UNIQUEIDENTIFIER NULL,
+        source_file NVARCHAR(4000) NULL,
+        source_row_number INT NULL,
+        loaded_at DATETIME2(6) NULL,
+        row_hash VARBINARY(32) NULL
     );
 END;
 GO
@@ -73,11 +73,11 @@ BEGIN
         CID VARCHAR(255) NULL,
         BDATE VARCHAR(255) NULL,
         GEN VARCHAR(255) NULL,
-        batch_id UNIQUEIDENTIFIER NOT NULL,
-        source_file NVARCHAR(4000) NOT NULL,
-        source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL,
-        row_hash VARBINARY(32) NOT NULL
+        batch_id UNIQUEIDENTIFIER NULL,
+        source_file NVARCHAR(4000) NULL,
+        source_row_number INT NULL,
+        loaded_at DATETIME2(6) NULL,
+        row_hash VARBINARY(32) NULL
     );
 END;
 GO
@@ -87,11 +87,11 @@ BEGIN
     CREATE TABLE staging.erp_loc_a101 (
         CID VARCHAR(255) NULL,
         CNTRY VARCHAR(255) NULL,
-        batch_id UNIQUEIDENTIFIER NOT NULL,
-        source_file NVARCHAR(4000) NOT NULL,
-        source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL,
-        row_hash VARBINARY(32) NOT NULL
+        batch_id UNIQUEIDENTIFIER NULL,
+        source_file NVARCHAR(4000) NULL,
+        source_row_number INT NULL,
+        loaded_at DATETIME2(6) NULL,
+        row_hash VARBINARY(32) NULL
     );
 END;
 GO
@@ -103,11 +103,11 @@ BEGIN
         CAT VARCHAR(255) NULL,
         SUBCAT VARCHAR(255) NULL,
         MAINTENANCE VARCHAR(255) NULL,
-        batch_id UNIQUEIDENTIFIER NOT NULL,
-        source_file NVARCHAR(4000) NOT NULL,
-        source_row_number INT NOT NULL,
-        loaded_at DATETIME2(6) NOT NULL,
-        row_hash VARBINARY(32) NOT NULL
+        batch_id UNIQUEIDENTIFIER NULL,
+        source_file NVARCHAR(4000) NULL,
+        source_row_number INT NULL,
+        loaded_at DATETIME2(6) NULL,
+        row_hash VARBINARY(32) NULL
     );
 END;
 GO

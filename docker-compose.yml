@@ -1,31 +1,10 @@
-name: sqlserver-data-warehouse
+name: sqlserver2022
 
 services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    platform: linux/amd64
-    container_name: dw_sqlserver
-    environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${SQLSERVER_PASSWORD:-YourStrong!Passw0rd}
-      MSSQL_PID: Developer
-    ports:
-      - "${SQLSERVER_PORT:-1433}:1433"
-    volumes:
-      - sqlserver_data:/var/opt/mssql
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/1433' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-
   airflow-init:
     build:
       context: .
       dockerfile: infra/airflow/Dockerfile
-    depends_on:
-      sqlserver:
-        condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: SequentialExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
@@ -51,7 +30,7 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
-      SQLSERVER_HOST: sqlserver
+      SQLSERVER_HOST: sqlserver2022
       SQLSERVER_PORT: 1433
       SQLSERVER_DATABASE: CustomerSales
       SQLSERVER_USER: sa
@@ -79,7 +58,7 @@ services:
       AIRFLOW__CORE__EXECUTOR: SequentialExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      SQLSERVER_HOST: sqlserver
+      SQLSERVER_HOST: sqlserver2022
       SQLSERVER_PORT: 1433
       SQLSERVER_DATABASE: CustomerSales
       SQLSERVER_USER: sa
@@ -95,6 +74,10 @@ services:
     command: scheduler
 
 volumes:
-  sqlserver_data:
   airflow_home:
   airflow_logs:
+
+networks:
+  default:
+    external: true
+    name: sqlserver2022_default

@@ -13,9 +13,10 @@ from dotenv import load_dotenv
 
 from sqlserver_connection import get_connection
 
-
+# This is the metadata columns that will capture the auditing information for each row
 METADATA_COLUMNS = ["batch_id", "source_file", "source_row_number", "loaded_at", "row_hash"]
 
+# This is the configuration for each table we want to load.
 TABLES_TO_LOAD = [
     {
         "name": "crm_cust_info",
@@ -64,7 +65,8 @@ TABLES_TO_LOAD = [
     },
 ]
 
-
+# This is the function for setting up logging to both console and a file.
+# The return of this function is the logger instance that can be used throughout the code to log messages.
 def setup_logging():
     logger = logging.getLogger("bronze_etl")
     logger.setLevel(logging.INFO)
@@ -85,7 +87,9 @@ def setup_logging():
 
     return logger
 
-
+# This function reads the required configuration from environment variables and validates that all required paths are provided.
+# It receives the logger instance as a parameter to log any errors related 
+# to missing configuration and exits the program if any required configuration is missing.
 def require_config(logger):
     load_dotenv()
 
@@ -101,10 +105,12 @@ def require_config(logger):
     if missing:
         logger.error("Missing required source path variables: %s", ", ".join(missing))
         sys.exit(1)
-
+    # It returns dictionary of paths after validating the existence of all required environment variables.
+    # The keys of the dictionary are the table names and the values are the corresponding file paths.
     return paths
 
-
+# This function is a utility function to quote SQL identifiers 
+# such as table and column names to prevent issues with reserved keywords or special characters.
 def quote_name(name):
     return f"[{name}]"
 
@@ -129,7 +135,7 @@ def read_csv_rows(file_path, table_config, batch_id):
                 source_file,
                 row_number,
                 loaded_at,
-                pyodbc.Binary(hash_row(row, columns)),
+                hash_row(row, columns),
             ])
             rows.append(values)
 
