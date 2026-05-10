@@ -19,8 +19,8 @@ logging.basicConfig(
 
 load_dotenv()
 
-# File paths from your .env (or default local data_files directory)
-BASE_PATH = os.getenv('SOURCE_BASE_PATH', 'data_files/')
+# File paths from your .env (or default local datasets directory)
+BASE_PATH = os.getenv('SOURCE_BASE_PATH', 'datasets/')
 os.makedirs(BASE_PATH, exist_ok=True)
 file_paths = {
     'crm_cust_info': os.getenv('PATH_CRM_CUST_INFO', os.path.join(BASE_PATH, 'cust_info.csv')),
